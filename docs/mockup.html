@@ -1,0 +1,510 @@
+<title>Бистро «Для двоих»</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Yeseva+One&family=Manrope:wght@400;500;600;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+  :root {
+    color-scheme: dark;
+    --wine: #3E1020;
+    --wine-deep: #26080F;
+    --paper: #FBF0EB;
+    --paper-2: #F3E0D8;
+    --ink: #3A0F1E;
+    --ink-soft: #7A4A57;
+    --rose: #C23C63;
+    --rose-soft: #F4D3DC;
+    --gold: #C9964A;
+    --line: #E3C8C0;
+    --lock-text: #FBEFF2;
+    --display: "Yeseva One", Georgia, "Times New Roman", serif;
+    --body: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(120% 80% at 50% 0%, #5A1830 0%, var(--wine) 45%, var(--wine-deep) 100%);
+    background-color: var(--wine);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-inline: 16px;
+    padding-block: 28px 48px;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:focus-visible, textarea:focus-visible, label:focus-within { outline: 2px solid var(--gold); outline-offset: 2px; }
+
+  .intro { max-width: 1120px; margin: 0 auto 24px; color: var(--paper); }
+  .intro h1 { font-family: var(--display); font-weight: 400; font-size: clamp(26px, 4vw, 34px); margin: 0; text-wrap: balance; }
+  .intro p { margin: 4px 0 0; color: #E7C6CF; max-width: 62ch; }
+
+  .stage {
+    max-width: 1120px; margin: 0 auto;
+    display: grid; gap: 28px;
+    grid-template-columns: 240px minmax(0, 400px) 280px;
+    justify-content: center; align-items: start;
+  }
+  @media (max-width: 1000px) {
+    .stage { grid-template-columns: minmax(0, 400px); }
+    .phone { order: -1; }
+  }
+  .side-label {
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: #E7C6CF; margin: 0 0 10px; font-weight: 600;
+  }
+
+  /* Fridge magnet */
+  .magnet {
+    background: var(--paper); border-radius: 6px; padding: 18px 18px 16px;
+    transform: rotate(-2deg);
+    box-shadow: 0 14px 30px rgba(0,0,0,.35);
+    position: relative; text-align: center;
+  }
+  .magnet::before {
+    content: ""; position: absolute; top: -10px; left: 50%; width: 26px; height: 26px; margin-left: -13px;
+    border-radius: 50%; background: radial-gradient(circle at 35% 30%, #E86C8E, var(--rose) 55%, #7E1D3A);
+    box-shadow: 0 3px 6px rgba(0,0,0,.35);
+  }
+  .magnet .m-title { font-family: var(--display); font-size: 22px; margin: 6px 0 12px; }
+  .qr { width: 150px; margin: 0 auto; background: #fff; padding: 8px; border-radius: 4px; }
+  .qr svg, .qr img { width: 100%; height: auto; display: block; }
+  .qr-fallback { font-size: 12px; color: var(--ink-soft); padding: 40px 6px; }
+  .magnet .m-note { font-size: 12px; color: var(--ink-soft); margin: 10px 0 0; }
+  .fridge-caption { color: #E7C6CF; font-size: 13px; margin: 18px 0 0; }
+
+  /* Phone / menu card */
+  .phone {
+    background: var(--paper); border-radius: 28px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 8px #1A0509;
+    min-height: 640px; display: flex; flex-direction: column;
+  }
+  .bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px 10px; border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-soft); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .bar b { font-family: var(--display); font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 16px; color: var(--ink); }
+  .screen { padding: 22px 22px 26px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+  .eyebrow { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--rose); font-weight: 700; margin: 0; }
+  .h { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1.12; margin: 0; text-wrap: balance; }
+  .h.sm { font-size: 24px; }
+  .lede { margin: 0; color: var(--ink-soft); }
+
+  .answers { display: grid; gap: 10px; }
+  .answer {
+    display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; text-align: left;
+    border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 14px 16px;
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .answer:hover { border-color: var(--rose); transform: translateY(-1px); }
+  .answer .em { font-size: 26px; text-align: center; }
+  .answer strong { display: block; font-size: 16px; }
+  .answer span.sub { font-size: 13px; color: var(--ink-soft); }
+  .answer.yes { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .answer.yes span.sub { color: #E7C6CF; }
+
+  .qotd {
+    border-top: 1px dashed var(--line); padding-top: 16px; margin-top: auto;
+    display: grid; gap: 8px;
+  }
+  .qotd p.q { margin: 0; font-family: var(--display); font-size: 18px; line-height: 1.3; }
+  .link-btn { background: none; border: 0; padding: 0; color: var(--rose); font-weight: 600; font-size: 13px; justify-self: start; }
+
+  .back { background: none; border: 0; padding: 0; color: var(--ink-soft); font-size: 13px; align-self: flex-start; }
+
+  .course { display: grid; gap: 10px; }
+  .course-head { display: flex; align-items: baseline; gap: 8px; }
+  .course-head h3 { margin: 0; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+  .course-head .dots { flex: 1; border-bottom: 1px dotted var(--ink-soft); transform: translateY(-3px); }
+  .course-head small { color: var(--ink-soft); font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; border-radius: 999px;
+    padding: 8px 14px; font-size: 14px; transition: background .15s, border-color .15s, color .15s;
+  }
+  .chip:hover { border-color: var(--rose); }
+  .chip[aria-pressed="true"] { background: var(--rose); border-color: var(--rose); color: #fff; }
+  .chip.wide { flex: 1 1 100%; text-align: left; border-radius: 12px; padding: 12px 14px; }
+
+  textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+    font: inherit; font-size: 14px; background: #fff; color: var(--ink); resize: vertical; min-height: 64px;
+  }
+  .soft-note { background: var(--rose-soft); border-radius: 12px; padding: 10px 14px; font-size: 13px; margin: 0; }
+
+  .cta {
+    margin-top: auto; border: 0; border-radius: 14px; padding: 15px 18px;
+    background: var(--ink); color: var(--paper); font-weight: 700; font-size: 15px;
+  }
+  .cta:hover { background: #551a2d; }
+
+  /* Receipt */
+  .receipt {
+    background: #fff; border-radius: 4px; padding: 20px 18px 24px; position: relative;
+    box-shadow: 0 6px 18px rgba(58,15,30,.12);
+    font-variant-numeric: tabular-nums;
+    -webkit-mask: radial-gradient(circle 7px at 50% 100%, transparent 98%, #000) 0 0 / 18px 100% repeat-x;
+            mask: radial-gradient(circle 7px at 50% 100%, transparent 98%, #000) 0 0 / 18px 100% repeat-x;
+    padding-bottom: 30px;
+  }
+  .r-head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 12px; margin-bottom: 12px; }
+  .r-head .r-name { font-family: var(--display); font-size: 22px; }
+  .r-head .r-meta { font-size: 12px; color: var(--ink-soft); letter-spacing: .06em; }
+  .r-row { display: flex; gap: 8px; align-items: baseline; font-size: 14px; padding: 3px 0; }
+  .r-row .k { color: var(--ink-soft); white-space: nowrap; }
+  .r-row .d { flex: 1; border-bottom: 1px dotted var(--line); transform: translateY(-3px); min-width: 12px; }
+  .r-row .v { text-align: right; font-weight: 600; max-width: 60%; }
+  .r-total { border-top: 1px dashed var(--line); margin-top: 12px; padding-top: 12px; display: flex; justify-content: space-between; font-weight: 700; }
+  .r-foot { text-align: center; margin: 14px 0 0; font-size: 12px; color: var(--ink-soft); }
+  .stamp {
+    position: absolute; right: 10px; top: 10px; transform: rotate(-12deg);
+    border: 2px solid var(--rose); color: var(--rose); border-radius: 6px;
+    padding: 2px 8px; font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .85;
+  }
+  .sent { display: flex; gap: 10px; align-items: center; font-size: 13px; color: var(--ink-soft); }
+  .sent::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #3FA46A; flex: none; }
+  .row-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ghost { border: 1px solid var(--line); background: transparent; border-radius: 12px; padding: 11px 14px; font-weight: 600; font-size: 14px; }
+
+  /* Partner lock screen */
+  .lock {
+    border-radius: 28px; padding: 22px 14px 18px; min-height: 420px;
+    background: linear-gradient(170deg, #4B1528 0%, #20060D 70%);
+    box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 8px #1A0509;
+    color: var(--lock-text); display: flex; flex-direction: column; gap: 12px;
+  }
+  .clock { text-align: center; font-weight: 300; font-size: 54px; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .date { text-align: center; font-size: 13px; opacity: .8; margin-top: -6px; }
+  .notes { display: grid; gap: 8px; margin-top: 10px; }
+  .note {
+    background: rgba(255,255,255,.12); backdrop-filter: blur(8px);
+    border-radius: 16px; padding: 10px 12px; font-size: 13px; line-height: 1.4; text-align: left; border: 0; color: var(--lock-text);
+    animation: pop .35s ease;
+  }
+  .note .n-top { display: flex; justify-content: space-between; font-size: 11px; opacity: .75; margin-bottom: 2px; }
+  .note .n-title { font-weight: 700; }
+  .note.hidden-body .n-body { filter: blur(5px); user-select: none; }
+  @keyframes pop { from { transform: translateY(-6px); opacity: .4; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .note { animation: none; } .answer { transition: none; } }
+  .toggle { display: flex; gap: 10px; align-items: center; font-size: 13px; margin-top: auto; opacity: .9; cursor: pointer; }
+  .toggle input { accent-color: var(--rose); width: 18px; height: 18px; }
+  .lock-hint { font-size: 12px; opacity: .6; margin: 0; }
+</style>
+
+<header class="intro">
+  <h1>Бистро «Для двоих»</h1>
+  <p>Кликабельный макет. Слева наклейка на холодильник, в центре экран того, кто отсканировал код, справа телефон второго партнёра, куда прилетает ответ.</p>
+</header>
+
+<div class="stage">
+  <aside>
+    <p class="side-label">На холодильнике</p>
+    <div class="magnet">
+      <div class="m-title">Что на ужин?</div>
+      <div class="qr" id="qr"><div class="qr-fallback">QR-код</div></div>
+      <p class="m-note">Наведи камеру телефона</p>
+    </div>
+    <p class="fridge-caption">Гость увидит безобидное «Что на ужин?». Партнёр знает, что внутри. QR в макете ведёт на пример ссылки, в рабочей версии там будет адрес вашей пары.</p>
+  </aside>
+
+  <main class="phone" aria-live="polite">
+    <div class="bar"><b>Бистро «Для двоих»</b><span id="barDate">сегодня</span></div>
+
+    <!-- Start -->
+    <section class="screen" id="s-start">
+      <p class="eyebrow">Меню на вечер</p>
+      <h2 class="h">Шеф интересуется: десерт сегодня подавать?</h2>
+      <div class="answers">
+        <button class="answer yes" data-go="yes"><span class="em" aria-hidden="true">🔥</span><span><strong>Да, обязательно</strong><span class="sub">Сейчас оформим заказ</span></span></button>
+        <button class="answer" data-go="maybe"><span class="em" aria-hidden="true">😏</span><span><strong>Может быть… уговори меня</strong><span class="sub">Выбери, что поможет</span></span></button>
+        <button class="answer" data-go="no"><span class="em" aria-hidden="true">🛋️</span><span><strong>Сегодня только обнимашки</strong><span class="sub">И это нормальный ответ</span></span></button>
+      </div>
+      <div class="qotd">
+        <p class="eyebrow">Вопрос дня, обсудите за ужином</p>
+        <p class="q" id="qText">Какое наше свидание ты вспоминаешь чаще всего?</p>
+        <button class="link-btn" id="qNext">Другой вопрос →</button>
+      </div>
+    </section>
+
+    <!-- Yes -->
+    <section class="screen" id="s-yes" hidden>
+      <button class="back" data-go="start">← К меню</button>
+      <p class="eyebrow">Оформление заказа</p>
+      <h2 class="h sm">Отлично. Как подать десерт?</h2>
+
+      <div class="course">
+        <div class="course-head"><h3>Время подачи</h3><span class="dots"></span><small>одно</small></div>
+        <div class="chips" data-group="time" data-mode="single">
+          <button class="chip" aria-pressed="false">Сразу после ужина</button>
+          <button class="chip" aria-pressed="false">Когда дети уснут</button>
+          <button class="chip" aria-pressed="false">Ближе к ночи</button>
+          <button class="chip" aria-pressed="false">Внезапно</button>
+        </div>
+      </div>
+
+      <div class="course">
+        <div class="course-head"><h3>Сервировка</h3><span class="dots"></span><small>сколько угодно</small></div>
+        <div class="chips" data-group="setting" data-mode="multi">
+          <button class="chip" aria-pressed="false">Свечи</button>
+          <button class="chip" aria-pressed="false">Наша музыка</button>
+          <button class="chip" aria-pressed="false">Душ вдвоём</button>
+          <button class="chip" aria-pressed="false">Бокал вина</button>
+          <button class="chip" aria-pressed="false">Без церемоний</button>
+        </div>
+      </div>
+
+      <div class="course">
+        <div class="course-head"><h3>Блюдо дня</h3><span class="dots"></span><small>одно</small></div>
+        <div class="chips" data-group="dish" data-mode="single">
+          <button class="chip" aria-pressed="false">Массаж для начала</button>
+          <button class="chip" aria-pressed="false">Новое бельё</button>
+          <button class="chip" aria-pressed="false">Игра с кубиками</button>
+          <button class="chip" aria-pressed="false">Удиви меня</button>
+        </div>
+      </div>
+
+      <div class="course">
+        <div class="course-head"><h3>Острота</h3><span class="dots"></span><small>одна</small></div>
+        <div class="chips" data-group="spice" data-mode="single">
+          <button class="chip" aria-pressed="false">🌶 Нежно</button>
+          <button class="chip" aria-pressed="false">🌶🌶 Средне</button>
+          <button class="chip" aria-pressed="false">🌶🌶🌶 Огонь</button>
+        </div>
+      </div>
+
+      <button class="cta" data-send="yes">Передать заказ шефу</button>
+    </section>
+
+    <!-- Maybe -->
+    <section class="screen" id="s-maybe" hidden>
+      <button class="back" data-go="start">← К меню</button>
+      <p class="eyebrow">Переговоры</p>
+      <h2 class="h sm">Шанс есть. Что поднимет настроение?</h2>
+      <div class="chips" data-group="helps" data-mode="multi">
+        <button class="chip wide" aria-pressed="false">🍽 Помой посуду сегодня ты</button>
+        <button class="chip wide" aria-pressed="false">💆 Массаж спины, 15 минут</button>
+        <button class="chip wide" aria-pressed="false">🍝 Сначала вкусный ужин</button>
+        <button class="chip wide" aria-pressed="false">🐕 Выгуляй собаку сам(а)</button>
+        <button class="chip wide" aria-pressed="false">🛁 Ванна с пеной для меня</button>
+        <button class="chip wide" aria-pressed="false">💬 Три искренних комплимента</button>
+        <button class="chip wide" aria-pressed="false">🤫 Час тишины после работы</button>
+      </div>
+      <label for="custom" class="eyebrow" style="color:var(--ink-soft)">Своё условие</label>
+      <textarea id="custom" placeholder="Например: закажи роллы из того места"></textarea>
+      <button class="cta" data-send="maybe">Отправить условия</button>
+    </section>
+
+    <!-- No -->
+    <section class="screen" id="s-no" hidden>
+      <button class="back" data-go="start">← К меню</button>
+      <p class="eyebrow">Кухня закрыта</p>
+      <h2 class="h sm">Понял, шеф. Как проведём вечер?</h2>
+      <div class="chips" data-group="no" data-mode="single">
+        <button class="chip wide" aria-pressed="false">🤗 Обнимемся и спать</button>
+        <button class="chip wide" aria-pressed="false">📺 Сериал под пледом</button>
+        <button class="chip wide" aria-pressed="false">🗓 Перенесём на завтра</button>
+        <button class="chip wide" aria-pressed="false">☕ Просто поговорим</button>
+      </div>
+      <p class="soft-note">Никаких обид. Если выбрать «Перенесём на завтра», шеф напомнит завтра в 21:00.</p>
+      <button class="cta" data-send="no">Отправить</button>
+    </section>
+
+    <!-- Receipt -->
+    <section class="screen" id="s-receipt" hidden>
+      <p class="eyebrow" id="rEyebrow">Заказ принят</p>
+      <div class="receipt">
+        <div class="r-head">
+          <div class="r-name">Бистро «Для двоих»</div>
+          <div class="r-meta" id="rMeta">Заказ № 0427</div>
+        </div>
+        <span class="stamp" id="rStamp">Принято</span>
+        <div id="rRows"></div>
+        <div class="r-total"><span id="rTotalK">Итого</span><span id="rTotalV">бесценно</span></div>
+        <p class="r-foot" id="rFoot">Спасибо, что выбрали нас</p>
+      </div>
+      <p class="sent">Ответ ушёл партнёру</p>
+      <div class="row-btns">
+        <button class="ghost" data-go="start">Изменить ответ</button>
+      </div>
+    </section>
+  </main>
+
+  <aside>
+    <p class="side-label">Телефон партнёра</p>
+    <div class="lock">
+      <div class="clock" id="clock">20:14</div>
+      <div class="date" id="lockDate">четверг</div>
+      <div class="notes" id="notes">
+        <div class="note">
+          <div class="n-top"><span>Бистро</span><span>19:02</span></div>
+          <div class="n-title">Меню на вечер открыто</div>
+          <div class="n-body">Ждём ответа от шефа…</div>
+        </div>
+      </div>
+      <label class="toggle" for="discreet"><input type="checkbox" id="discreet" checked> Скрывать детали в уведомлениях</label>
+      <p class="lock-hint">С включённым режимом чужой глаз увидит только «Ваш заказ принят». Нажми на уведомление, чтобы раскрыть.</p>
+    </div>
+  </aside>
+</div>
+
+<script>
+(function () {
+  // QR on the fridge magnet (example link)
+  try {
+    var qr = qrcode(0, 'M');
+    qr.addData('https://example.com/menu/7F3K');
+    qr.make();
+    document.getElementById('qr').innerHTML = qr.createSvgTag(4, 0);
+  } catch (e) { /* fallback text stays */ }
+
+  var days = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+  var months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  var now = new Date();
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  document.getElementById('barDate').textContent = now.getDate() + ' ' + months[now.getMonth()];
+  document.getElementById('lockDate').textContent = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()];
+  function tick() { document.getElementById('clock').textContent = hhmm(new Date()); }
+  tick(); setInterval(tick, 20000);
+
+  // Question of the day
+  var questions = [
+    'Какое наше свидание ты вспоминаешь чаще всего?',
+    'Что тебе больше всего понравилось в последний раз?',
+    'Чего тебе хотелось бы попробовать вместе?',
+    'Где бы ты хотел(а) провести с нами идеальные выходные?',
+    'Какой мой жест заботы ты замечаешь, а я об этом не знаю?',
+    'Что в первые недели знакомства тебя во мне зацепило?',
+    'Какой комплимент от меня ты хотел(а) бы слышать чаще?',
+    'Если бы у нас был свободный вечер без телефонов, как бы ты его провёл(а)?'
+  ];
+  var qi = 0;
+  document.getElementById('qNext').addEventListener('click', function () {
+    qi = (qi + 1 + Math.floor(Math.random() * (questions.length - 1))) % questions.length;
+    document.getElementById('qText').textContent = questions[qi];
+  });
+
+  // Navigation
+  var screens = ['start','yes','maybe','no','receipt'];
+  function go(name) {
+    screens.forEach(function (s) { document.getElementById('s-' + s).hidden = (s !== name); });
+    document.querySelector('.phone').scrollTop = 0;
+  }
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('[data-go]');
+    if (g) { if (g.dataset.go === 'start') resetAll(); go(g.dataset.go); }
+  });
+
+  // Chips
+  function chipValue(btn) { return btn.textContent.trim(); }
+  document.querySelectorAll('.chips').forEach(function (group) {
+    group.addEventListener('click', function (e) {
+      var btn = e.target.closest('.chip'); if (!btn) return;
+      if (group.dataset.mode === 'single') {
+        var was = btn.getAttribute('aria-pressed') === 'true';
+        group.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+        btn.setAttribute('aria-pressed', was ? 'false' : 'true');
+      } else {
+        btn.setAttribute('aria-pressed', btn.getAttribute('aria-pressed') === 'true' ? 'false' : 'true');
+      }
+    });
+  });
+  function picked(name) {
+    return Array.prototype.map.call(
+      document.querySelectorAll('[data-group="' + name + '"] .chip[aria-pressed="true"]'), chipValue);
+  }
+  function stripEmoji(s) { return s.replace(/^[^\p{L}\d]+/u, '').trim(); }
+  function resetAll() {
+    document.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+    document.getElementById('custom').value = '';
+  }
+
+  // Receipt + notification
+  var orderNo = 427;
+  function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function rows(list) {
+    return list.map(function (r) {
+      return '<div class="r-row"><span class="k">' + esc(r[0]) + '</span><span class="d"></span><span class="v">' + esc(r[1]) + '</span></div>';
+    }).join('');
+  }
+  function notify(title, body) {
+    var n = document.createElement('button');
+    n.className = 'note' + (document.getElementById('discreet').checked ? ' hidden-body' : '');
+    n.innerHTML = '<div class="n-top"><span>Бистро</span><span>' + hhmm(new Date()) + '</span></div>' +
+      '<div class="n-title">' + esc(document.getElementById('discreet').checked ? 'Ваш заказ принят' : title) + '</div>' +
+      '<div class="n-body">' + esc(body) + '</div>';
+    n.dataset.title = title;
+    n.addEventListener('click', function () {
+      n.classList.remove('hidden-body');
+      n.querySelector('.n-title').textContent = n.dataset.title;
+    });
+    var box = document.getElementById('notes');
+    box.insertBefore(n, box.firstChild);
+    while (box.children.length > 4) box.removeChild(box.lastChild);
+  }
+  document.getElementById('discreet').addEventListener('change', function (e) {
+    document.querySelectorAll('#notes .note').forEach(function (n) {
+      if (!n.dataset.title) return;
+      n.classList.toggle('hidden-body', e.target.checked);
+      n.querySelector('.n-title').textContent = e.target.checked ? 'Ваш заказ принят' : n.dataset.title;
+    });
+  });
+
+  function showReceipt(o) {
+    orderNo++;
+    document.getElementById('rEyebrow').textContent = o.eyebrow;
+    document.getElementById('rMeta').textContent = 'Заказ № ' + pad(Math.floor(orderNo / 100)) + pad(orderNo % 100) + ' · ' + hhmm(new Date());
+    document.getElementById('rStamp').textContent = o.stamp;
+    document.getElementById('rRows').innerHTML = rows(o.rows);
+    document.getElementById('rTotalK').textContent = o.totalK;
+    document.getElementById('rTotalV').textContent = o.totalV;
+    document.getElementById('rFoot').textContent = o.foot;
+    notify(o.nTitle, o.nBody);
+    go('receipt');
+  }
+
+  document.querySelectorAll('[data-send]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var kind = b.dataset.send;
+      if (kind === 'yes') {
+        var time = picked('time')[0] || 'на усмотрение шефа';
+        var setting = picked('setting'); var dish = picked('dish')[0] || 'сюрприз';
+        var spice = picked('spice')[0] || '🌶🌶 Средне';
+        showReceipt({
+          eyebrow: 'Заказ принят', stamp: 'Принято',
+          rows: [['Десерт', 'да'], ['Подача', time], ['Сервировка', setting.length ? setting.join(', ') : 'как обычно'], ['Блюдо дня', dish], ['Острота', spice]],
+          totalK: 'Итого', totalV: 'бесценно', foot: 'Шеф уже улыбается',
+          nTitle: '🔥 Десерт сегодня подаётся',
+          nBody: time.charAt(0).toUpperCase() + time.slice(1) + ' · ' + dish + ' · ' + spice
+        });
+      } else if (kind === 'maybe') {
+        var helps = picked('helps').map(stripEmoji);
+        var custom = document.getElementById('custom').value.trim();
+        if (custom) helps.push(custom);
+        if (!helps.length) helps = ['удиви меня'];
+        showReceipt({
+          eyebrow: 'Условия переданы', stamp: 'На рассмотрении',
+          rows: helps.map(function (h, i) { return ['Условие ' + (i + 1), h]; }),
+          totalK: 'Шансы', totalV: 'растут', foot: 'Выполни условия, и шеф пересмотрит меню',
+          nTitle: '😏 Может быть. Есть условия',
+          nBody: helps.join(' · ')
+        });
+      } else {
+        var choice = picked('no')[0];
+        var plain = choice ? stripEmoji(choice) : 'Обнимемся и спать';
+        var later = plain === 'Перенесём на завтра';
+        showReceipt({
+          eyebrow: 'Кухня закрыта', stamp: later ? 'Завтра' : 'Уют',
+          rows: [['Десерт', later ? 'перенесён' : 'не сегодня'], ['Вместо него', plain]].concat(later ? [['Напоминание', 'завтра, 21:00']] : []),
+          totalK: 'Итого', totalV: 'обнимашки', foot: 'Спасибо за честный ответ',
+          nTitle: later ? '🗓 Десерт переносится на завтра' : '🛋 Сегодня только обнимашки',
+          nBody: plain
+        });
+      }
+    });
+  });
+})();
+</script>

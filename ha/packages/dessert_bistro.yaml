@@ -1,0 +1,425 @@
+# ============================================================================
+#  Бистро «Для двоих» — пакет Home Assistant
+#
+#  Подключение (configuration.yaml):
+#    homeassistant:
+#      packages: !include_dir_named packages
+#  и положите этот файл в <config>/packages/dessert_bistro.yaml
+#
+#  В secrets.yaml добавьте длинный случайный идентификатор вебхука:
+#    bistro_webhook_id: "<python3 -c 'import secrets; print(secrets.token_urlsafe(32))'>"
+#
+#  Страница шлёт POST /api/webhook/<id> с JSON:
+#    {"v":1, "id":"o…", "from":"Аня", "answer":"yes|maybe|no|ping",
+#     "details":{…}, "ts":"2026-09-24T19:02:00.000Z"}
+#  Уведомление уходит ВТОРОМУ партнёру (не тому, кто в "from").
+#
+#  Требуется Home Assistant 2024.10+ (синтаксис triggers:/actions:).
+# ============================================================================
+
+script:
+  bistro_notify:
+    alias: "Бистро: уведомление"
+    description: >-
+      Отправляет пуш одному из партнёров с учётом дискретного режима.
+      Сюда же вынесены все настройки пакета (блок variables ниже).
+    icon: mdi:room-service
+    mode: queued
+    max: 20
+
+    # ╔══════════════════════════════════════════════════════════════════╗
+    # ║  НАСТРОЙКИ — подставьте свои значения                            ║
+    # ╚══════════════════════════════════════════════════════════════════╝
+    # Этот же блок (якорь &bistro_settings) используют автоматизации ниже.
+    variables: &bistro_settings
+      # Имя (ровно как в параметре from= в QR-коде) → сервис уведомлений ЕГО телефона.
+      # Список сервисов: Инструменты разработчика → Действия → «notify.mobile_app_…».
+      partners:
+        "Аня": notify.mobile_app_anya_phone
+        "Макс": notify.mobile_app_max_phone
+      # Когда напомнить о «Перенесём на завтра»
+      reminder_time: "21:00"
+      # Что видно на экране в дискретном режиме
+      discreet_title: "Бистро"
+      discreet_text: "Ваш заказ принят"
+      # Канал уведомлений Android (создастся сам, звук/важность настраиваются в телефоне)
+      channel: "Бистро"
+
+    fields:
+      to:
+        description: Имя получателя (ключ из partners)
+        required: true
+        example: "Аня"
+        selector:
+          text:
+      title:
+        description: Заголовок с подробностями
+        required: true
+        selector:
+          text:
+      message:
+        description: Текст с подробностями
+        required: true
+        selector:
+          text:
+            multiline: true
+      tag:
+        description: Тег Android — новое уведомление с тем же тегом заменяет старое
+        default: bistro
+        selector:
+          text:
+      discreet_message:
+        description: Текст вместо подробностей в дискретном режиме
+        selector:
+          text:
+      details_button:
+        description: В дискретном режиме добавить кнопку «Показать детали»
+        default: false
+        selector:
+          boolean:
+      force_details:
+        description: Показать подробности, даже если дискретный режим включён
+        default: false
+        selector:
+          boolean:
+
+    sequence:
+      - variables:
+          service: "{{ partners.get(to, '') }}"
+          discreet: >-
+            {{ is_state('input_boolean.bistro_discreet', 'on')
+               and not (force_details | default(false) | bool) }}
+          notify_data: >-
+            {% set d = {'tag': tag | default('bistro'), 'channel': channel,
+                        'priority': 'high', 'ttl': 0} %}
+            {% if discreet and (details_button | default(false) | bool) %}
+              {% set d = dict(d, actions=[{'action': 'BISTRO_DETAILS', 'title': 'Показать детали'}]) %}
+            {% endif %}
+            {{ d }}
+      - if:
+          - condition: template
+            value_template: "{{ service == '' }}"
+        then:
+          - action: system_log.write
+            data:
+              level: warning
+              logger: bistro
+              message: "Бистро: для «{{ to }}» не указан сервис уведомлений в partners"
+          - stop: "Неизвестный получатель"
+      - action: "{{ service }}"
+        data:
+          title: "{{ discreet_title if discreet else title }}"
+          message: "{{ (discreet_message | default(discreet_text, true)) if discreet else message }}"
+          data: "{{ notify_data }}"
+
+
+automation:
+  # --------------------------------------------------------------------------
+  # Ответ со страницы
+  # --------------------------------------------------------------------------
+  - id: bistro_webhook
+    alias: "Бистро: ответ со страницы"
+    description: Принимает ответ из веб-страницы и шлёт пуш второму партнёру.
+    mode: queued
+    max: 10
+    triggers:
+      - trigger: webhook
+        webhook_id: !secret bistro_webhook_id
+        allowed_methods:
+          - POST
+        # Страница открыта на телефоне через мобильный интернет → запрос приходит извне
+        local_only: false
+    variables: *bistro_settings
+    actions:
+      # --- разбор и проверка запроса -------------------------------------
+      - variables:
+          p: "{{ trigger.json if trigger.json is defined and trigger.json is mapping else {} }}"
+          sender: "{{ p.get('from', '') | string | trim }}"
+          answer: "{{ p.get('answer', '') | string }}"
+          d: "{{ p.get('details') if p.get('details') is mapping else {} }}"
+          order_id: "{{ p.get('id', '') | string | truncate(40, true, '') }}"
+          recipient: "{{ partners | list | reject('eq', sender) | first | default('') }}"
+      - if:
+          - condition: template
+            value_template: >-
+              {{ sender not in partners or recipient == ''
+                 or answer not in ['yes', 'maybe', 'no', 'ping'] }}
+        then:
+          - action: system_log.write
+            data:
+              level: warning
+              logger: bistro
+              message: >-
+                Бистро: отклонён запрос (from={{ sender | truncate(40) }},
+                answer={{ answer | truncate(20) }}). Проверьте имена в partners и QR-коды.
+          - stop: "Неверные данные"
+      # «Повторить» на странице шлёт тот же id — второй раз не уведомляем
+      - condition: template
+        value_template: >-
+          {{ order_id == '' or answer == 'ping'
+             or order_id != (state_attr('sensor.bistro_last_order', 'order_id') | string) }}
+
+      # --- «Проверить связь»: пуш самому отправителю ----------------------
+      - if:
+          - condition: template
+            value_template: "{{ answer == 'ping' }}"
+        then:
+          - action: script.bistro_notify
+            data:
+              to: "{{ sender }}"
+              title: "🔔 Связь с кухней есть"
+              message: "Вебхук работает, уведомления доходят. Приятного вечера!"
+              tag: bistro-ping
+              force_details: true
+          - stop: "Проверка связи"
+
+      # --- текст уведомления --------------------------------------------
+      - variables:
+          postpone: "{{ answer == 'no' and d.get('option') == 'tomorrow' }}"
+          setting: "{{ d.get('setting') if d.get('setting') is list else [] }}"
+          helps: >-
+            {{ (d.get('helps') if d.get('helps') is list else [])
+               + ([d.get('custom')] if d.get('custom') else []) }}
+          title: >-
+            {% if answer == 'yes' %}🔥 Десерт сегодня подаётся
+            {%- elif answer == 'maybe' %}😏 Может быть. Есть условия
+            {%- elif postpone %}🗓 Десерт переносится на завтра
+            {%- else %}🛋 Сегодня только обнимашки{% endif %}
+          message: >-
+            {% if answer == 'yes' %}
+              {{- [d.get('time') or 'на усмотрение шефа', d.get('dish') or 'сюрприз', d.get('spice') or '🌶🌶 Средне'] | map('string') | join(' · ') -}}
+              {{- ('\nСервировка: ' ~ (setting | map('string') | join(', '))) if setting else '' -}}
+            {% elif answer == 'maybe' %}
+              {{- (helps | map('string') | join(' · ')) if helps else 'Удиви меня' -}}
+            {% else %}
+              {{- d.get('label') or 'Обнимемся и спать' -}}
+              {{- ('. Напомню завтра в ' ~ reminder_time) if postpone else '' -}}
+            {% endif %}
+
+      # --- история и счётчики -------------------------------------------
+      - event: bistro_order
+        event_data:
+          order_id: "{{ order_id }}"
+          from: "{{ sender }}"
+          to: "{{ recipient }}"
+          answer: "{{ answer }}"
+          title: "{{ title }}"
+          message: "{{ message | truncate(1000) }}"
+          ts: "{{ p.get('ts', now().isoformat()) | string | truncate(40, true, '') }}"
+          details: "{{ d }}"
+      - action: counter.increment
+        target:
+          entity_id: "counter.bistro_{{ answer }}"
+      - if:
+          - condition: template
+            value_template: "{{ postpone }}"
+        then:
+          - action: counter.increment
+            target:
+              entity_id: counter.bistro_postponed
+
+      # --- напоминание «Перенесём на завтра» ----------------------------
+      # Хранится в хелперах, переживает перезапуск HA (никаких delay).
+      - if:
+          - condition: template
+            value_template: "{{ postpone }}"
+        then:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.bistro_reminder_at
+            data:
+              # После полуночи «завтра» — это уже сегодня вечером
+              datetime: >-
+                {% set t = today_at(reminder_time) %}
+                {{ (t if now().hour < 5 else t + timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S') }}
+          # Напоминание получает тот, кому отказали
+          - action: input_text.set_value
+            target:
+              entity_id: input_text.bistro_reminder_to
+            data:
+              value: "{{ recipient }}"
+          - action: input_boolean.turn_on
+            target:
+              entity_id: input_boolean.bistro_reminder_pending
+        else:
+          # Любой новый ответ отменяет старое напоминание
+          - action: input_boolean.turn_off
+            target:
+              entity_id: input_boolean.bistro_reminder_pending
+
+      # --- уведомление второму партнёру ---------------------------------
+      - action: script.bistro_notify
+        data:
+          to: "{{ recipient }}"
+          title: "{{ title }}"
+          message: "{{ message }}"
+          tag: bistro-order
+          details_button: true
+
+      # --- (опционально) атмосфера при «Да» ------------------------------
+      # Раскомментируйте и подставьте свои entity_id.
+      # - if:
+      #     - condition: template
+      #       value_template: "{{ answer == 'yes' }}"
+      #   then:
+      #     - action: light.turn_on
+      #       target:
+      #         entity_id: light.ZAMENITE_svet_v_spalne        # ← ваш свет
+      #       data:
+      #         brightness_pct: 20
+      #         color_temp_kelvin: 2200
+      #         transition: 30
+      #     - action: media_player.play_media
+      #       target:
+      #         entity_id: media_player.ZAMENITE_kolonka       # ← ваша колонка
+      #       data:
+      #         media_content_id: "ZAMENITE_ssylka_na_playlist" # ← плейлист / радио
+      #         media_content_type: music
+      #     - action: media_player.volume_set
+      #       target:
+      #         entity_id: media_player.ZAMENITE_kolonka
+      #       data:
+      #         volume_level: 0.25
+      #     # Или одной сценой (см. блок scene: в конце файла):
+      #     # - action: scene.turn_on
+      #     #   target:
+      #     #     entity_id: scene.bistro_romantic
+
+  # --------------------------------------------------------------------------
+  # Кнопка «Показать детали» в дискретном уведомлении
+  # --------------------------------------------------------------------------
+  - id: bistro_show_details
+    alias: "Бистро: показать детали"
+    description: По нажатию на кнопку заменяет «Ваш заказ принят» на подробности.
+    mode: queued
+    triggers:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: BISTRO_DETAILS
+    conditions:
+      - condition: template
+        value_template: "{{ state_attr('sensor.bistro_last_order', 'to') not in [none, ''] }}"
+    actions:
+      - action: script.bistro_notify
+        data:
+          to: "{{ state_attr('sensor.bistro_last_order', 'to') }}"
+          title: "{{ state_attr('sensor.bistro_last_order', 'title') }}"
+          message: "{{ state_attr('sensor.bistro_last_order', 'message') }}"
+          tag: bistro-order
+          force_details: true
+
+  # --------------------------------------------------------------------------
+  # Напоминание «Перенесём на завтра»
+  # --------------------------------------------------------------------------
+  - id: bistro_reminder
+    alias: "Бистро: напоминание о переносе"
+    description: >-
+      Срабатывает в момент из input_datetime.bistro_reminder_at. Если HA был
+      выключен в это время, напомнит после старта (в пределах 3 часов).
+    mode: single
+    triggers:
+      - trigger: time
+        at: input_datetime.bistro_reminder_at
+        id: on_time
+      - trigger: homeassistant
+        event: start
+        id: after_restart
+    conditions:
+      - condition: state
+        entity_id: input_boolean.bistro_reminder_pending
+        state: "on"
+      - condition: template
+        value_template: >-
+          {% set t = state_attr('input_datetime.bistro_reminder_at', 'timestamp') | float(0) %}
+          {{ trigger.id == 'on_time' or (t <= now().timestamp() < t + 3 * 3600) }}
+    actions:
+      - action: script.bistro_notify
+        data:
+          to: "{{ states('input_text.bistro_reminder_to') }}"
+          title: "🗓 Шеф напоминает"
+          message: "Вчера десерт перенесли на сегодня. Меню открыто 😉"
+          discreet_message: "Шеф напоминает о вчерашнем заказе"
+          tag: bistro-reminder
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.bistro_reminder_pending
+
+
+# ----------------------------------------------------------------------------
+# Хелперы. Без initial: — значения восстанавливаются после перезапуска.
+# ----------------------------------------------------------------------------
+input_boolean:
+  bistro_discreet:
+    name: "Бистро: дискретный режим"
+    icon: mdi:incognito
+  bistro_reminder_pending:
+    name: "Бистро: ждёт напоминание"
+    icon: mdi:calendar-clock
+
+input_datetime:
+  bistro_reminder_at:
+    name: "Бистро: когда напомнить"
+    has_date: true
+    has_time: true
+    icon: mdi:bell-ring-outline
+
+input_text:
+  bistro_reminder_to:
+    name: "Бистро: кому напомнить"
+    max: 40
+    icon: mdi:account-heart
+
+
+# ----------------------------------------------------------------------------
+# Статистика: счётчики ответов + последний заказ (с историей в Recorder)
+# ----------------------------------------------------------------------------
+counter:
+  bistro_yes:
+    name: "Бистро: «Да»"
+    icon: mdi:fire
+  bistro_maybe:
+    name: "Бистро: «Может быть»"
+    icon: mdi:emoticon-wink-outline
+  bistro_no:
+    name: "Бистро: «Нет»"
+    icon: mdi:sofa-outline
+  bistro_postponed:
+    name: "Бистро: перенесено на завтра"
+    icon: mdi:calendar-arrow-right
+
+template:
+  - triggers:
+      - trigger: event
+        event_type: bistro_order
+    sensor:
+      - name: "Bistro last order"
+        unique_id: bistro_last_order
+        icon: mdi:receipt-text-outline
+        state: "{{ trigger.event.data.answer }}"
+        attributes:
+          order_id: "{{ trigger.event.data.order_id }}"
+          from: "{{ trigger.event.data.from }}"
+          to: "{{ trigger.event.data.to }}"
+          title: "{{ trigger.event.data.title }}"
+          message: "{{ trigger.event.data.message }}"
+          ts: "{{ trigger.event.data.ts }}"
+          details: "{{ trigger.event.data.details }}"
+
+
+# ----------------------------------------------------------------------------
+# (опционально) Сцена «романтика» — раскомментируйте и подставьте entity_id
+# ----------------------------------------------------------------------------
+# scene:
+#   - id: bistro_romantic
+#     name: "Бистро: романтика"
+#     entities:
+#       light.ZAMENITE_svet_v_spalne:
+#         state: "on"
+#         brightness: 50
+#         color_temp_kelvin: 2200
+#       light.ZAMENITE_verhnij_svet:
+#         state: "off"
+#       media_player.ZAMENITE_kolonka:
+#         state: "on"
+#         volume_level: 0.25

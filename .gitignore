@@ -1,0 +1,20 @@
+# Сгенерированные QR — содержат адрес HA и webhook_id
+qr/
+*.qr.png
+
+# Локальные конфиги и секреты
+secrets.yaml
+*.local.*
+.env
+.env.*
+local/
+
+# Python / OS / редакторы
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

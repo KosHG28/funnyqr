@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Никаких чужих сайтов не зовём и адрес страницы (с секретами во фрагменте) никому не отдаём -->
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#3E1020">
+<meta name="color-scheme" content="dark">
+<title>Что на ужин?</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preload" href="fonts/YesevaOne-Regular.ttf" as="font" type="font/ttf" crossorigin>
+<style>
+  @font-face { font-family: "Yeseva One"; src: url("fonts/YesevaOne-Regular.ttf") format("truetype"); font-display: swap; }
+  @font-face { font-family: "Manrope"; src: url("fonts/Manrope-Variable.ttf") format("truetype"); font-weight: 200 800; font-display: swap; }
+  :root {
+    color-scheme: dark;
+    --wine: #3E1020;
+    --wine-deep: #26080F;
+    --paper: #FBF0EB;
+    --ink: #3A0F1E;
+    --ink-soft: #7A4A57;
+    --rose: #C23C63;
+    --rose-soft: #F4D3DC;
+    --gold: #C9964A;
+    --line: #E3C8C0;
+    --ok: #3FA46A;
+    --err: #C0392B;
+    --display: "Yeseva One", Georgia, "Times New Roman", serif;
+    --body: "Manrope", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { min-height: 100%; }
+  body {
+    margin: 0;
+    background: radial-gradient(120% 80% at 50% 0%, #5A1830 0%, var(--wine) 45%, var(--wine-deep) 100%) fixed;
+    background-color: var(--wine);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding: 28px 16px 48px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  button:disabled { cursor: default; opacity: .6; }
+  button:focus-visible, textarea:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  h2:focus { outline: none; }
+
+  /* Карточка меню */
+  .app {
+    color-scheme: light;
+    max-width: 440px; margin: 0 auto;
+    background: var(--paper); border-radius: 28px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(0,0,0,.45), 0 0 0 8px #1A0509;
+    min-height: min(640px, calc(100dvh - 76px)); display: flex; flex-direction: column;
+  }
+  @media (max-width: 480px) {
+    body { padding: 0; }
+    .app { border-radius: 0; box-shadow: none; min-height: 100dvh; max-width: none;
+           padding-bottom: env(safe-area-inset-bottom); }
+  }
+  .bar {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    padding: 14px 20px 10px; padding-top: max(14px, env(safe-area-inset-top)); border-bottom: 1px solid var(--line);
+    font-size: 12px; color: var(--ink-soft); letter-spacing: .08em; text-transform: uppercase;
+  }
+  .bar b { font-family: var(--display); font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 16px; color: var(--ink); }
+  .screen { padding: 22px 22px 26px; display: flex; flex-direction: column; gap: 18px; flex: 1; }
+  .eyebrow { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--rose); font-weight: 700; margin: 0; }
+  .h { font-family: var(--display); font-weight: 400; font-size: 30px; line-height: 1.12; margin: 0; text-wrap: balance; }
+  .h.sm { font-size: 24px; }
+  .lede { margin: 0; color: var(--ink-soft); }
+
+  .answers { display: grid; gap: 10px; }
+  .answer {
+    display: grid; grid-template-columns: 40px 1fr; gap: 12px; align-items: center; text-align: left;
+    border: 1px solid var(--line); background: #fff; border-radius: 14px; padding: 14px 16px;
+    transition: transform .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .answer:hover { border-color: var(--rose); transform: translateY(-1px); }
+  .answer .em { font-size: 26px; text-align: center; }
+  .answer strong { display: block; font-size: 16px; }
+  .answer .sub { font-size: 13px; color: var(--ink-soft); }
+  .answer.yes { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  .answer.yes .sub { color: #E7C6CF; }
+
+  .qotd { border-top: 1px dashed var(--line); padding-top: 16px; margin-top: auto; display: grid; gap: 8px; }
+  .qotd p.q { margin: 0; font-family: var(--display); font-size: 18px; line-height: 1.3; }
+  .link-btn { background: none; border: 0; padding: 0; color: var(--rose); font-weight: 600; font-size: 13px; justify-self: start; }
+  .foot-link { background: none; border: 0; padding: 4px 0; color: var(--ink-soft); font-size: 12px; align-self: center; opacity: .75; }
+
+  .back { background: none; border: 0; padding: 0; color: var(--ink-soft); font-size: 13px; align-self: flex-start; }
+
+  .course { display: grid; gap: 10px; }
+  .course-head { display: flex; align-items: baseline; gap: 8px; }
+  .course-head h3 { margin: 0; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+  .course-head .dots { flex: 1; border-bottom: 1px dotted var(--ink-soft); transform: translateY(-3px); }
+  .course-head small { color: var(--ink-soft); font-size: 12px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--line); background: #fff; border-radius: 999px;
+    padding: 8px 14px; font-size: 14px; transition: background .15s, border-color .15s, color .15s;
+  }
+  .chip:hover { border-color: var(--rose); }
+  .chip[aria-pressed="true"] { background: var(--rose); border-color: var(--rose); color: #fff; }
+  .chip.wide { flex: 1 1 100%; text-align: left; border-radius: 12px; padding: 12px 14px; }
+
+  label.eyebrow { color: var(--ink-soft); }
+  textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px;
+    font: inherit; font-size: 16px; background: #fff; color: var(--ink); resize: vertical; min-height: 64px;
+  }
+  .soft-note { background: var(--rose-soft); border-radius: 12px; padding: 10px 14px; font-size: 13px; margin: 0; }
+
+  .cta {
+    margin-top: auto; border: 0; border-radius: 14px; padding: 15px 18px;
+    background: var(--ink); color: var(--paper); font-weight: 700; font-size: 15px;
+  }
+  .cta:hover { background: #551a2d; }
+
+  /* Чек */
+  .receipt {
+    background: #fff; border-radius: 4px; padding: 20px 18px 30px; position: relative;
+    box-shadow: 0 6px 18px rgba(58,15,30,.12);
+    font-variant-numeric: tabular-nums;
+    -webkit-mask: radial-gradient(circle 7px at 50% 100%, transparent 98%, #000) 0 0 / 18px 100% repeat-x;
+            mask: radial-gradient(circle 7px at 50% 100%, transparent 98%, #000) 0 0 / 18px 100% repeat-x;
+  }
+  .r-head { text-align: center; border-bottom: 1px dashed var(--line); padding-bottom: 12px; margin-bottom: 12px; }
+  .r-head .r-name { font-family: var(--display); font-size: 22px; }
+  .r-head .r-meta { font-size: 12px; color: var(--ink-soft); letter-spacing: .06em; }
+  .r-row { display: flex; gap: 8px; align-items: baseline; font-size: 14px; padding: 3px 0; }
+  .r-row .k { color: var(--ink-soft); white-space: nowrap; }
+  .r-row .d { flex: 1; border-bottom: 1px dotted var(--line); transform: translateY(-3px); min-width: 12px; }
+  .r-row .v { text-align: right; font-weight: 600; max-width: 60%; overflow-wrap: anywhere; }
+  .r-total { border-top: 1px dashed var(--line); margin-top: 12px; padding-top: 12px; display: flex; justify-content: space-between; font-weight: 700; }
+  .r-foot-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
+  .r-foot { margin: 0; font-size: 12px; color: var(--ink-soft); }
+  .stamp {
+    flex: none; transform: rotate(-8deg); white-space: nowrap;
+    border: 2px solid var(--rose); color: var(--rose); border-radius: 6px;
+    padding: 2px 8px; font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .85;
+    transition: opacity .2s;
+  }
+  .receipt[data-state="pending"] .stamp { opacity: .25; }
+  .receipt[data-state="error"] .stamp { border-color: var(--ink-soft); color: var(--ink-soft); }
+
+  /* Статус отправки */
+  .status { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--ink-soft); margin: 0; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ink-soft); flex: none; margin-top: 6px; }
+  .status[data-state="pending"]::before { animation: blink 1s ease-in-out infinite; }
+  .status[data-state="ok"]::before { background: var(--ok); }
+  .status[data-state="error"] { color: var(--err); }
+  .status[data-state="error"]::before { background: var(--err); }
+  @keyframes blink { 50% { opacity: .2; } }
+  .row-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ghost { border: 1px solid var(--line); background: transparent; border-radius: 12px; padding: 11px 14px; font-weight: 600; font-size: 14px; }
+  .ghost.primary { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+  /* Служебные экраны */
+  .kv { display: grid; gap: 6px; margin: 0; font-size: 14px; }
+  .kv div { display: flex; gap: 8px; align-items: baseline; }
+  .kv dt { color: var(--ink-soft); }
+  .kv dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; flex: 1; text-align: right; }
+  .danger { color: var(--err); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .answer, .chip, .stamp { transition: none; }
+    .status[data-state="pending"]::before { animation: none; }
+  }
+</style>
+<script src="config.js"></script>
+</head>
+<body>
+<main class="app">
+  <div class="bar"><b id="barName">Бистро «Для двоих»</b><span id="barDate">сегодня</span></div>
+
+  <!-- Нет конфигурации: страницу открыли не из QR -->
+  <section class="screen" id="s-setup" hidden>
+    <p class="eyebrow">Кухня закрыта на учёт</p>
+    <h2 class="h" tabindex="-1">Отсканируй QR с холодильника</h2>
+    <p class="lede">Меню открывается по наклейке «Что на ужин?» на холодильнике. Наведи на неё камеру телефона, и страница откроется уже с ключом от кухни.</p>
+    <p class="soft-note" id="setupError" hidden></p>
+    <p class="lede" style="font-size:13px">Потом можно добавить страницу на главный экран: меню браузера → «Добавить на главный экран». Сканировать снова не придётся.</p>
+  </section>
+
+  <!-- Один QR на двоих: выбор «Кто ты?» -->
+  <section class="screen" id="s-who" hidden>
+    <p class="eyebrow">Знакомство</p>
+    <h2 class="h" tabindex="-1">Кто ты?</h2>
+    <p class="lede">Шеф запомнит и будет передавать твои ответы второму.</p>
+    <div class="answers" id="whoList"></div>
+  </section>
+
+  <!-- Старт -->
+  <section class="screen" id="s-start" hidden>
+    <p class="eyebrow" id="startEyebrow"></p>
+    <h2 class="h" tabindex="-1" id="startQuestion"></h2>
+    <div class="answers" id="startAnswers"></div>
+    <div class="qotd">
+      <p class="eyebrow" id="qotdLabel"></p>
+      <p class="q" id="qText" aria-live="polite"></p>
+      <button class="link-btn" id="qNext"></button>
+    </div>
+    <button class="foot-link" data-go="settings" id="settingsLink">Служебный вход</button>
+  </section>
+
+  <!-- Да -->
+  <section class="screen" id="s-yes" hidden>
+    <button class="back" data-go="start">← К меню</button>
+    <p class="eyebrow" id="yesEyebrow"></p>
+    <h2 class="h sm" tabindex="-1" id="yesTitle"></h2>
+    <div id="yesGroups" style="display:contents"></div>
+    <button class="cta" data-send="yes" id="yesCta"></button>
+  </section>
+
+  <!-- Может быть -->
+  <section class="screen" id="s-maybe" hidden>
+    <button class="back" data-go="start">← К меню</button>
+    <p class="eyebrow" id="maybeEyebrow"></p>
+    <h2 class="h sm" tabindex="-1" id="maybeTitle"></h2>
+    <div class="chips" data-group="helps" data-multi="1" id="maybeOptions"></div>
+    <label for="custom" class="eyebrow" id="customLabel"></label>
+    <textarea id="custom"></textarea>
+    <button class="cta" data-send="maybe" id="maybeCta"></button>
+  </section>
+
+  <!-- Нет -->
+  <section class="screen" id="s-no" hidden>
+    <button class="back" data-go="start">← К меню</button>
+    <p class="eyebrow" id="noEyebrow"></p>
+    <h2 class="h sm" tabindex="-1" id="noTitle"></h2>
+    <div class="chips" data-group="no" id="noOptions"></div>
+    <p class="soft-note" id="noNote"></p>
+    <button class="cta" data-send="no" id="noCta"></button>
+  </section>
+
+  <!-- Чек + статус отправки -->
+  <section class="screen" id="s-receipt" hidden>
+    <p class="eyebrow" id="rEyebrow">Заказ принят</p>
+    <div class="receipt" id="receipt" data-state="pending">
+      <div class="r-head">
+        <div class="r-name" id="rName">Бистро «Для двоих»</div>
+        <div class="r-meta" id="rMeta">Заказ № 0001</div>
+      </div>
+      <div id="rRows"></div>
+      <div class="r-total"><span id="rTotalK">Итого</span><span id="rTotalV">бесценно</span></div>
+      <div class="r-foot-row"><p class="r-foot" id="rFoot">Спасибо, что выбрали нас</p><span class="stamp" id="rStamp">Принято</span></div>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite" data-state="pending">Передаём на кухню…</p>
+    <div class="row-btns">
+      <button class="ghost primary" id="retry" hidden>Повторить</button>
+      <button class="ghost" data-go="start">Изменить ответ</button>
+    </div>
+  </section>
+
+  <!-- Служебный вход -->
+  <section class="screen" id="s-settings" hidden>
+    <button class="back" data-go="start">← К меню</button>
+    <p class="eyebrow">Служебный вход</p>
+    <h2 class="h sm" tabindex="-1">Настройки кухни</h2>
+    <dl class="kv">
+      <div><dt>Ты</dt><dd id="setFrom">—</dd></div>
+      <div><dt>Кухня</dt><dd id="setHost">—</dd></div>
+    </dl>
+    <div class="row-btns">
+      <button class="ghost" id="ping">Проверить связь</button>
+      <button class="ghost" id="changeWho" hidden>Сменить имя</button>
+    </div>
+    <p class="status" id="pingStatus" role="status" aria-live="polite" hidden></p>
+    <p class="lede" style="font-size:13px">«Проверить связь» отправит тестовый запрос. Если всё настроено, на <b>твой</b> телефон придёт пуш «Связь с кухней есть». Home Assistant отвечает «200 OK» даже на неверный webhook_id, поэтому надёжно проверить можно только пушем.</p>
+    <button class="foot-link danger" id="forget">Забыть настройки на этом телефоне</button>
+  </section>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var C = window.BISTRO;
+  var STORE_KEY = 'bistro.config.v1';
+  var ORDER_KEY = 'bistro.orderNo';
+
+  // ---------- helpers ----------
+  function $(id) { return document.getElementById(id); }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function hhmm(d) { return pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+  function load(key) { try { return JSON.parse(localStorage.getItem(key)); } catch (e) { return null; } }
+  function save(key, v) { try { localStorage.setItem(key, JSON.stringify(v)); } catch (e) { /* приватный режим */ } }
+  function drop(key) { try { localStorage.removeItem(key); } catch (e) {} }
+  function randomId() {
+    var a = new Uint8Array(8);
+    (window.crypto || window.msCrypto).getRandomValues(a);
+    // префикс-буква: HA не превратит id вроде «1e5…» в число
+    return 'o' + Array.prototype.map.call(a, function (b) { return pad(b.toString(16)); }).join('');
+  }
+  function clip(s, n) { s = String(s == null ? '' : s).trim(); return s.length > n ? s.slice(0, n) : s; }
+
+  // ---------- конфигурация из фрагмента URL ----------
+  // #ha=<base64(url)>&wh=<webhook_id>&from=<имя>   (или &names=Аня,Макс вместо from)
+  function b64decode(s) {
+    s = s.replace(/ /g, '+').replace(/-/g, '+').replace(/_/g, '/');
+    while (s.length % 4) s += '=';
+    var bin = atob(s), bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  function normalizeBase(raw) {
+    var u = new URL(raw.trim());
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('bad protocol');
+    // страница на https не может ходить на http (mixed content) — кроме локальной отладки
+    if (location.protocol === 'https:' && u.protocol === 'http:') throw new Error('http');
+    return (u.origin + u.pathname).replace(/\/+$/, '');
+  }
+  function readFragment() {
+    var h = location.hash.replace(/^#/, '');
+    if (!h) return null;
+    var p = new URLSearchParams(h);
+    if (!p.has('ha') && !p.has('wh')) return null;
+    var res = { error: null, cfg: null };
+    try {
+      var ha = normalizeBase(b64decode(p.get('ha') || ''));
+      var wh = (p.get('wh') || '').trim();
+      if (!/^[A-Za-z0-9_\-.~]{8,200}$/.test(wh)) throw new Error('webhook');
+      var names = (p.get('names') || '').split(',').map(function (s) { return clip(s, 40); }).filter(Boolean);
+      var from = clip(p.get('from'), 40);
+      if (names.length && from && names.indexOf(from) < 0) from = '';
+      if (!from && names.length < 2) throw new Error('who');
+      var prev = load(STORE_KEY);
+      // один QR на двоих: не спрашиваем «Кто ты?» повторно, если уже выбрали на этом телефоне
+      if (!from && prev && prev.names && names.indexOf(prev.from) >= 0) from = prev.from;
+      res.cfg = { ha: ha, wh: wh, from: from, names: names };
+    } catch (e) {
+      res.error = e.message === 'http'
+        ? 'Адрес Home Assistant в QR начинается с http://. С GitHub Pages браузер пустит только на https://. Перепечатай QR с https-адресом (Nabu Casa или свой домен с сертификатом).'
+        : 'QR-код прочитан, но ключ от кухни в нём повреждён. Перепечатай его через tools/make_qr.py.';
+    }
+    // убираем секреты из адресной строки и истории
+    history.replaceState(null, '', location.pathname + location.search);
+    return res;
+  }
+
+  // Страница уже открыта, а QR отсканировали снова → перечитать с новым фрагментом
+  window.addEventListener('hashchange', function () {
+    if (/(^#|&)(ha|wh)=/.test(location.hash)) location.reload();
+  });
+
+  var frag = readFragment();
+  if (frag && frag.cfg) save(STORE_KEY, frag.cfg);
+  var cfg = load(STORE_KEY);
+  if (cfg && (!cfg.ha || !cfg.wh)) cfg = null;
+
+  // ---------- общие тексты ----------
+  var months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  var now = new Date();
+  $('barDate').textContent = now.getDate() + ' ' + months[now.getMonth()];
+  $('barName').textContent = C.name;
+  $('rName').textContent = C.name;
+
+  // ---------- навигация (кнопка «назад» Android тоже работает) ----------
+  var screens = ['setup', 'who', 'start', 'yes', 'maybe', 'no', 'receipt', 'settings'];
+  var current = null;
+  function show(name) {
+    current = name;
+    screens.forEach(function (s) { $('s-' + s).hidden = (s !== name); });
+    window.scrollTo(0, 0);
+    var h = $('s-' + name).querySelector('h2:not([hidden])');
+    if (h) h.focus({ preventScroll: true });
+  }
+  // Старт — корень истории (depth 0), остальные экраны кладутся поверх.
+  function depth() { return (history.state && history.state.depth) || 0; }
+  function go(name, replace) {
+    if (name === 'start') resetAll();
+    if (name === 'settings') fillSettings();
+    var st = { s: name, depth: replace ? depth() : depth() + 1 };
+    if (replace) history.replaceState(st, ''); else history.pushState(st, '');
+    show(name);
+  }
+  function goRoot() {
+    var d = depth();
+    if (d > 0) history.go(-d); else go('start', true);
+  }
+  window.addEventListener('popstate', function (e) {
+    var s = (e.state && e.state.s) || 'start';
+    if (!cfg) return show('setup');
+    if (!cfg.from) { renderWho(); return show('who'); }
+    if (s === 'receipt' || s === 'setup' || s === 'who') s = 'start';
+    if (s === 'start') resetAll();
+    if (s === 'settings') fillSettings();
+    show(s);
+  });
+  document.addEventListener('click', function (e) {
+    var g = e.target.closest('[data-go]');
+    if (!g) return;
+    if (g.dataset.go === 'start') goRoot(); else go(g.dataset.go);
+  });
+
+  // ---------- чипы ----------
+  function chip(text, value, wide) {
+    var b = el('button', 'chip' + (wide ? ' wide' : ''), text);
+    b.type = 'button';
+    b.setAttribute('aria-pressed', 'false');
+    b.dataset.value = value;
+    return b;
+  }
+  function wireChips(group) {
+    group.addEventListener('click', function (e) {
+      var b = e.target.closest('.chip'); if (!b) return;
+      var on = b.getAttribute('aria-pressed') === 'true';
+      if (!group.dataset.multi) {
+        group.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+      }
+      b.setAttribute('aria-pressed', on ? 'false' : 'true');
+    });
+  }
+  function picked(group) {
+    return Array.prototype.map.call(group.querySelectorAll('.chip[aria-pressed="true"]'), function (b) { return b.dataset.value; });
+  }
+  function resetAll() {
+    document.querySelectorAll('.chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
+    $('custom').value = '';
+  }
+
+  // ---------- построение экранов из config.js ----------
+  $('startEyebrow').textContent = C.start.eyebrow;
+  $('startQuestion').textContent = C.start.question;
+  ['yes', 'maybe', 'no'].forEach(function (k) {
+    var a = C.start.answers[k];
+    var b = el('button', 'answer' + (k === 'yes' ? ' yes' : ''));
+    b.type = 'button';
+    b.dataset.go = k;
+    var em = el('span', 'em', a.emoji); em.setAttribute('aria-hidden', 'true');
+    var txt = el('span'); txt.appendChild(el('strong', null, a.title)); txt.appendChild(el('span', 'sub', a.sub));
+    b.appendChild(em); b.appendChild(txt);
+    $('startAnswers').appendChild(b);
+  });
+  $('qotdLabel').textContent = C.start.qotdLabel;
+  $('qNext').textContent = C.start.qotdNext;
+  var qi = Math.floor(Math.random() * C.questions.length);
+  $('qText').textContent = C.questions[qi];
+  $('qNext').addEventListener('click', function () {
+    if (C.questions.length < 2) return;
+    qi = (qi + 1 + Math.floor(Math.random() * (C.questions.length - 1))) % C.questions.length;
+    $('qText').textContent = C.questions[qi];
+  });
+
+  $('yesEyebrow').textContent = C.yes.eyebrow;
+  $('yesTitle').textContent = C.yes.title;
+  $('yesCta').textContent = C.yes.cta;
+  var yesGroups = {};
+  C.yes.groups.forEach(function (g) {
+    var course = el('div', 'course');
+    var head = el('div', 'course-head');
+    head.appendChild(el('h3', null, g.title)); head.appendChild(el('span', 'dots')); head.appendChild(el('small', null, g.hint));
+    var chips = el('div', 'chips');
+    chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', g.title);
+    if (g.multi) chips.dataset.multi = '1';
+    g.options.forEach(function (o) { chips.appendChild(chip(o, o)); });
+    wireChips(chips);
+    course.appendChild(head); course.appendChild(chips);
+    $('yesGroups').appendChild(course);
+    yesGroups[g.key] = { cfg: g, node: chips };
+  });
+
+  $('maybeEyebrow').textContent = C.maybe.eyebrow;
+  $('maybeTitle').textContent = C.maybe.title;
+  $('maybeCta').textContent = C.maybe.cta;
+  $('customLabel').textContent = C.maybe.customLabel;
+  $('custom').placeholder = C.maybe.customPlaceholder;
+  $('custom').maxLength = C.maybe.customMaxLength || 200;
+  C.maybe.options.forEach(function (o) { $('maybeOptions').appendChild(chip(o.emoji + ' ' + o.label, o.label, true)); });
+  wireChips($('maybeOptions'));
+
+  $('noEyebrow').textContent = C.no.eyebrow;
+  $('noTitle').textContent = C.no.title;
+  $('noNote').textContent = C.no.note;
+  $('noCta').textContent = C.no.cta;
+  C.no.options.forEach(function (o) { $('noOptions').appendChild(chip(o.emoji + ' ' + o.label, o.id, true)); });
+  wireChips($('noOptions'));
+
+  // ---------- «Кто ты?» ----------
+  function renderWho() {
+    var box = $('whoList'); box.textContent = '';
+    (cfg.names || []).forEach(function (n) {
+      var b = el('button', 'answer'); b.type = 'button';
+      var em = el('span', 'em', '👤'); em.setAttribute('aria-hidden', 'true');
+      var t = el('span'); t.appendChild(el('strong', null, n));
+      b.appendChild(em); b.appendChild(t);
+      b.addEventListener('click', function () { cfg.from = n; save(STORE_KEY, cfg); goRoot(); });
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- отправка в Home Assistant ----------
+  // Webhook в HA зарегистрирован с cors_allowed=True: CORS разрешён для любого Origin,
+  // поэтому обычный fetch с application/json проходит (preflight OPTIONS HA отвечает сам).
+  function webhookUrl() { return cfg.ha + '/api/webhook/' + encodeURIComponent(cfg.wh); }
+
+  function postToHA(payload) {
+    if (navigator.onLine === false) return Promise.reject({ kind: 'offline' });
+    var ctrl = new AbortController();
+    var timer = setTimeout(function () { ctrl.abort(); }, C.requestTimeoutMs || 12000);
+    return fetch(webhookUrl(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal,
+      cache: 'no-store',
+      credentials: 'omit',
+      referrerPolicy: 'no-referrer'
+    }).then(function (res) {
+      clearTimeout(timer);
+      if (!res.ok) throw { kind: 'http', status: res.status };
+      return res.status;
+    }, function (err) {
+      clearTimeout(timer);
+      throw { kind: err && err.name === 'AbortError' ? 'timeout' : 'network' };
+    });
+  }
+
+  function explain(err) {
+    var s = err && err.status;
+    switch (err && err.kind) {
+      case 'offline': return 'Нет интернета. Проверь сеть и попробуй ещё раз.';
+      case 'timeout': return 'Кухня долго не отвечает. Home Assistant перегружен или недоступен снаружи.';
+      case 'network': return 'Не достучались до Home Assistant: он выключен, нет внешнего доступа или адрес в QR устарел.';
+    }
+    if (s === 405) return 'Вебхук не принимает POST (405). В автоматизации нужен allowed_methods: [POST].';
+    if (s === 404) return 'По этому адресу нет Home Assistant (404). Проверь адрес и перепечатай QR.';
+    if (s === 401 || s === 403) return 'Доступ запрещён (' + s + '). Похоже на прокси или блокировку по IP.';
+    if (s >= 500) return 'Сервер ответил ошибкой ' + s + '. Home Assistant или reverse proxy перед ним сейчас не в порядке.';
+    return 'Неожиданный ответ сервера' + (s ? ' (' + s + ')' : '') + '.';
+  }
+
+  var pending = null;   // { payload } последнего заказа — для «Повторить»
+  var sending = false;
+
+  function setStatus(state, text) {
+    var st = $('status');
+    st.dataset.state = state; st.textContent = text;
+    $('receipt').dataset.state = state;
+    $('retry').hidden = state !== 'error';
+    $('retry').disabled = false;
+  }
+
+  function sendOrder() {
+    if (sending || !pending) return;
+    sending = true;
+    setStatus('pending', 'Передаём на кухню…');
+    $('rStamp').textContent = pending.stamp;
+    postToHA(pending.payload).then(function () {
+      setStatus('ok', 'Ответ ушёл партнёру');
+    }, function (err) {
+      $('rStamp').textContent = 'Не отправлено';
+      setStatus('error', explain(err));
+    }).then(function () { sending = false; });
+  }
+  $('retry').addEventListener('click', function () { $('retry').disabled = true; sendOrder(); });
+
+  function nextOrderNo() {
+    var n = (load(ORDER_KEY) || 0) + 1;
+    save(ORDER_KEY, n);
+    return n;
+  }
+
+  function rows(list) {
+    var box = $('rRows'); box.textContent = '';
+    list.forEach(function (r) {
+      var row = el('div', 'r-row');
+      row.appendChild(el('span', 'k', r[0])); row.appendChild(el('span', 'd')); row.appendChild(el('span', 'v', r[1]));
+      box.appendChild(row);
+    });
+  }
+
+  function placeOrder(answer, details, r) {
+    var ts = new Date();
+    $('rEyebrow').textContent = r.eyebrow;
+    $('rMeta').textContent = 'Заказ № ' + String(nextOrderNo() % 10000).padStart(4, '0') + ' · ' + hhmm(ts);
+    rows(r.rows);
+    $('rTotalK').textContent = r.totalK;
+    $('rTotalV').textContent = r.totalV;
+    $('rFoot').textContent = r.foot;
+    pending = {
+      stamp: r.stamp,
+      payload: { v: 1, id: randomId(), from: cfg.from, answer: answer, details: details, ts: ts.toISOString() }
+    };
+    go('receipt', true);   // «назад» из чека ведёт в меню, а не в форму
+    sendOrder();
+  }
+
+  document.querySelectorAll('[data-send]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (sending) return;
+      var kind = b.dataset.send;
+      if (kind === 'yes') {
+        var d = {}, rr = [['Десерт', 'да']];
+        C.yes.groups.forEach(function (g) {
+          var v = picked(yesGroups[g.key].node);
+          if (g.multi) {
+            d[g.key] = v;
+            rr.push([g.title, v.length ? v.join(', ') : g.fallback]);
+          } else {
+            d[g.key] = v[0] || g.fallback;
+            rr.push([g.title, d[g.key]]);
+          }
+        });
+        if (yesGroups.spice) d.spice_level = yesGroups.spice.cfg.options.indexOf(d.spice) + 1 || 2;
+        placeOrder('yes', d, {
+          eyebrow: 'Заказ принят', stamp: 'Принято', rows: rr,
+          totalK: 'Итого', totalV: 'бесценно', foot: 'Шеф уже улыбается'
+        });
+      } else if (kind === 'maybe') {
+        var helps = picked($('maybeOptions'));
+        var custom = clip($('custom').value, C.maybe.customMaxLength || 200);
+        var list = helps.concat(custom ? [custom] : []);
+        if (!list.length) list = [C.maybe.fallback];
+        placeOrder('maybe', { helps: helps, custom: custom }, {
+          eyebrow: 'Условия переданы', stamp: 'На рассмотрении',
+          rows: list.map(function (h, i) { return ['Условие ' + (i + 1), h]; }),
+          totalK: 'Шансы', totalV: 'растут', foot: 'Выполни условия, и шеф пересмотрит меню'
+        });
+      } else {
+        var id = picked($('noOptions'))[0] || C.no.defaultId;
+        var opt = C.no.options.filter(function (o) { return o.id === id; })[0] || C.no.options[0];
+        var later = opt.id === 'tomorrow';
+        placeOrder('no', { option: opt.id, label: opt.label }, {
+          eyebrow: C.no.eyebrow, stamp: later ? 'Завтра' : 'Уют',
+          rows: [['Десерт', later ? 'перенесён' : 'не сегодня'], ['Вместо него', opt.label]]
+            .concat(later ? [['Напоминание', 'завтра, ' + C.reminderTime]] : []),
+          totalK: 'Итого', totalV: 'обнимашки', foot: 'Спасибо за честный ответ'
+        });
+      }
+    });
+  });
+
+  // ---------- служебный вход ----------
+  function fillSettings() {
+    $('setFrom').textContent = cfg.from || '—';
+    var host = cfg.ha; try { host = new URL(cfg.ha).host; } catch (e) {}
+    $('setHost').textContent = host;
+    $('changeWho').hidden = !(cfg.names && cfg.names.length > 1);
+    $('pingStatus').hidden = true;
+  }
+  $('ping').addEventListener('click', function () {
+    var st = $('pingStatus'), btn = $('ping');
+    btn.disabled = true;
+    st.hidden = false; st.dataset.state = 'pending'; st.textContent = 'Стучимся на кухню…';
+    postToHA({ v: 1, id: randomId(), from: cfg.from, answer: 'ping', details: {}, ts: new Date().toISOString() })
+      .then(function () {
+        st.dataset.state = 'ok';
+        st.textContent = 'Home Assistant ответил. Жди пуш «Связь с кухней есть» на свой телефон. Не пришёл за минуту? Значит, неверный webhook_id, имя «' + cfg.from + '» не указано в пакете или автоматизация выключена.';
+      }, function (err) {
+        st.dataset.state = 'error'; st.textContent = explain(err);
+      }).then(function () { btn.disabled = false; });
+  });
+  $('changeWho').addEventListener('click', function () { renderWho(); go('who'); });
+  $('forget').addEventListener('click', function () {
+    if (!confirm('Забыть адрес кухни на этом телефоне? Потом придётся снова сканировать QR.')) return;
+    drop(STORE_KEY); cfg = null;
+    go('setup', true);
+  });
+
+  // ---------- первый экран ----------
+  if (!cfg) {
+    if (frag && frag.error) { $('setupError').textContent = frag.error; $('setupError').hidden = false; }
+    go('setup', true);
+  } else if (!cfg.from) {
+    renderWho(); go('who', true);
+  } else {
+    go('start', true);
+  }
+})();
+</script>
+</body>
+</html>
