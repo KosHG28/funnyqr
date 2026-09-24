@@ -23,43 +23,47 @@ QR на холодильнике ──► страница (GitHub Pages) ─�
 
 ```
 index.html, config.js, manifest.webmanifest, icons/, fonts/   страница
-deploy/ntfy/docker-compose.yml, server.yml                    сервер уведомлений
+deploy/ntfy/  docker-compose.yml, setup.sh, .env.example  сервер уведомлений и печать QR
 tools/make_qr.py                                              генерация QR (PNG + A6 PDF)
 docs/mockup.html                                              исходный макет
 ```
 
 > Первая версия работала через Home Assistant. Она осталась в истории git (коммит `ece37da`), если когда-нибудь понадобится.
 
-## 1. Сервер ntfy (домашний сервер с Docker)
+## 1. Сервер ntfy — всё в docker compose
 
-Отдельный контейнер на порту **7090**, больше ничего не трогает.
-
-```bash
-mkdir -p ~/ntfy && cd ~/ntfy
-# скопируйте сюда deploy/ntfy/docker-compose.yml и deploy/ntfy/server.yml
-nano server.yml          # base-url: "https://ntfy.ваш-домен"
-docker compose up -d
-curl http://localhost:7090/v1/health      # {"healthy":true}
-```
-
-### Пользователи, канал и токен
-
-Сервер закрыт от посторонних (`auth-default-access: deny-all`). Нужны два пользователя:
-парень, который только читает, и «страница», которая только пишет.
+Отдельный контейнер `bistro-ntfy` на порту **7090**, больше ничего не трогает. Нужен только Docker.
 
 ```bash
-TOPIC=bistro_$(openssl rand -hex 6)      # секретное имя канала, запишите его
-echo $TOPIC
+# на сервере: скачайте репозиторий (git clone или ZIP с GitHub) и перейдите в папку
+cd funnyqr/deploy/ntfy
 
-docker compose exec ntfy ntfy user add paren          # спросит пароль — им вы войдёте в приложении
-docker compose exec ntfy ntfy user add bistro-page    # пароль любой, он не понадобится
-docker compose exec ntfy ntfy access paren       $TOPIC read-only
-docker compose exec ntfy ntfy access bistro-page $TOPIC write-only
-docker compose exec ntfy ntfy token add bistro-page   # → tk_…  этот токен пойдёт в QR
+./setup.sh                   # спросит внешний адрес, логин и пароль для телефона → создаст .env
+docker compose up -d         # ntfy на http://<сервер>:7090
+docker compose run --rm qr   # QR-наклейка → funnyqr/qr/bistro-A6.pdf
 ```
 
-Токен в QR может только **писать** в этот канал: прочитать им чужие сообщения или писать в другие каналы нельзя.
-Если QR потеряется — `ntfy token remove bistro-page tk_…`, новый токен и новый QR.
+`setup.sh` сам генерирует секретное имя канала, токен для QR и хеши паролей и складывает всё в `.env`
+(права `600`, в git не попадает). Пользователи, права и токен ntfy создаёт сам при старте
+из переменных `NTFY_AUTH_*` — ручных команд `ntfy user …` не нужно:
+
+| Кто | Права |
+|---|---|
+| ваш телефон (логин из `setup.sh`) | только **читать** канал |
+| страница (токен в QR) | только **писать** в этот канал |
+| все остальные | ничего (`deny-all`) |
+
+Полезное:
+
+```bash
+docker compose logs -f ntfy            # что происходит
+./setup.sh --force && docker compose up -d && docker compose run --rm qr
+                                       # новый канал и токен (если QR потерялся) → перепечатать QR,
+                                       # в приложении подписаться на новый канал
+```
+
+Данные (сообщения, включая отложенное напоминание, и база пользователей) лежат в `deploy/ntfy/data/`
+и переживают перезапуск. Пример `.env` — в `.env.example`.
 
 ### Внешний доступ по https
 
@@ -75,15 +79,16 @@ docker compose exec ntfy ntfy token add bistro-page   # → tk_…  этот т�
 Приложение держит долгое соединение с сервером, поэтому прокси не должен обрывать его через 60 с
 (в голом nginx: `proxy_buffering off; proxy_read_timeout 3m;` и заголовки `Upgrade`/`Connection` для WebSocket).
 
-`upstream-base-url: https://ntfy.sh` в `server.yml` нужен для мгновенной доставки на Android без лишнего расхода батареи:
+`NTFY_UPSTREAM_BASE_URL: https://ntfy.sh` в compose нужен для мгновенной доставки на Android без лишнего расхода батареи:
 через ntfy.sh уходит только сигнал «проверь сервер», тексты остаются у вас.
 
 ### Проверка через curl
 
 ```bash
-curl -H "Authorization: Bearer tk_…" \
-  -d '{"topic":"bistro_…","title":"🔔 Проверка","message":"Если видишь это — всё работает"}' \
-  https://ntfy.ваш-домен/
+cd funnyqr/deploy/ntfy && set -a && . ./.env && set +a
+curl -H "Authorization: Bearer $BISTRO_TOKEN" \
+  -d "{\"topic\":\"$BISTRO_TOPIC\",\"title\":\"🔔 Проверка\",\"message\":\"Если видишь это — всё работает\"}" \
+  "$NTFY_BASE_URL/"
 ```
 
 Ответ `200` с JSON — сообщение принято. `401` — неверный токен, `403` — у токена нет прав на этот канал.
@@ -91,19 +96,21 @@ curl -H "Authorization: Bearer tk_…" \
 ## 2. Телефон парня
 
 1. Google Play → **ntfy**.
-2. «+» → включить **Use another server** → `https://ntfy.ваш-домен`, канал — ваш `$TOPIC`.
-3. Войти пользователем `paren` с паролем из шага выше (приложение спросит само или через *Settings → Users*).
+2. «+» → включить **Use another server** → `https://ntfy.ваш-домен`, канал — тот, что показал `setup.sh`
+   (или `BISTRO_TOPIC` в `.env`).
+3. Войти логином и паролем из `setup.sh` (приложение спросит само или через *Settings → Users*).
 4. В настройках Android можно скрыть содержимое уведомлений ntfy на экране блокировки.
 
 ## 3. QR на холодильник
 
+QR печатает `docker compose run --rm qr` (шаг 1) → `qr/bistro.png` и `qr/bistro-A6.pdf`. Печатайте PDF в масштабе 100 %.
+Без Docker — тем же скриптом напрямую:
+
 ```bash
 pip install -r tools/requirements.txt
-python3 tools/make_qr.py --server https://ntfy.ваш-домен --topic bistro_… --token tk_…
-# дискретный режим по умолчанию: добавьте --discreet
+python3 tools/make_qr.py --server https://ntfy.ваш-домен --topic bistro_… --token tk_… [--discreet]
 ```
 
-Появятся `qr/bistro.png` и `qr/bistro-A6.pdf`. Печатайте PDF в масштабе 100 %.
 **В QR лежат адрес сервера и токен — не коммитьте и не выкладывайте папку `qr/`** (она в `.gitignore`).
 
 После первого скана: меню браузера → «Добавить на главный экран». Ярлык открывает меню без повторного сканирования.

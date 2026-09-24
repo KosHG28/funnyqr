@@ -12,11 +12,13 @@
 - `#r=<base64url(JSON чека)>` — ссылка из уведомления: показывает чек только для просмотра.
 - Публикация: «простой» `POST <server>/?auth=<base64url("Bearer tk")>` с JSON без заголовков (без CORS-preflight).
   Напоминание — отложенное сообщение (`delay`, `sequence_id: bistro-reminder`), отмена — `DELETE /<topic>/bistro-reminder`.
-- `deploy/ntfy/` — docker-compose (порт 7090) и `server.yml` (deny-all, cache-file, upstream ntfy.sh).
+- `deploy/ntfy/` — docker-compose (порт 7090): ntfy целиком настраивается переменными окружения из `.env`
+  (пользователи/ACL/токен через `NTFY_AUTH_USERS/ACCESS/TOKENS`, deny-all, cache-file, upstream ntfy.sh);
+  `setup.sh` генерирует `.env` (канал, токен, bcrypt-хеши); сервис `qr` (profile tools) печатает наклейку.
 - `tools/make_qr.py` — QR-наклейка PNG + A6 PDF.
 
 ## Правило: никаких секретов в репозитории
-- Никогда не коммитить адрес реального сервера, имя канала, токены, пароли и сгенерированные QR (`qr/`).
+- Никогда не коммитить адрес реального сервера, имя канала, токены, пароли, `deploy/ntfy/.env`, `deploy/ntfy/data/` и сгенерированные QR (`qr/`).
 - В примерах использовать плейсхолдеры (`ntfy.example.ru`, `bistro_…`, `tk_…`).
 
 ## Проверка
