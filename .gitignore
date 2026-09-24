@@ -18,3 +18,7 @@ venv/
 Thumbs.db
 .idea/
 .vscode/
+
+# Данные ntfy, если запускать прямо из папки репо
+deploy/ntfy/cache/
+deploy/ntfy/lib/

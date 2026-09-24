@@ -168,6 +168,8 @@
   .kv dt { color: var(--ink-soft); }
   .kv dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; flex: 1; text-align: right; }
   .danger { color: var(--err); }
+  .toggle { display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer; }
+  .toggle input { accent-color: var(--rose); width: 18px; height: 18px; margin: 0; }
 
   @media (prefers-reduced-motion: reduce) {
     .answer, .chip, .stamp { transition: none; }
@@ -187,14 +189,6 @@
     <p class="lede">Меню открывается по наклейке «Что на ужин?» на холодильнике. Наведи на неё камеру телефона, и страница откроется уже с ключом от кухни.</p>
     <p class="soft-note" id="setupError" hidden></p>
     <p class="lede" style="font-size:13px">Потом можно добавить страницу на главный экран: меню браузера → «Добавить на главный экран». Сканировать снова не придётся.</p>
-  </section>
-
-  <!-- Один QR на двоих: выбор «Кто ты?» -->
-  <section class="screen" id="s-who" hidden>
-    <p class="eyebrow">Знакомство</p>
-    <h2 class="h" tabindex="-1">Кто ты?</h2>
-    <p class="lede">Шеф запомнит и будет передавать твои ответы второму.</p>
-    <div class="answers" id="whoList"></div>
   </section>
 
   <!-- Старт -->
@@ -240,7 +234,7 @@
     <button class="cta" data-send="no" id="noCta"></button>
   </section>
 
-  <!-- Чек + статус отправки -->
+  <!-- Чек + статус отправки. Он же открывается у партнёра по нажатию на уведомление (#r=…) -->
   <section class="screen" id="s-receipt" hidden>
     <p class="eyebrow" id="rEyebrow">Заказ принят</p>
     <div class="receipt" id="receipt" data-state="pending">
@@ -252,10 +246,12 @@
       <div class="r-total"><span id="rTotalK">Итого</span><span id="rTotalV">бесценно</span></div>
       <div class="r-foot-row"><p class="r-foot" id="rFoot">Спасибо, что выбрали нас</p><span class="stamp" id="rStamp">Принято</span></div>
     </div>
-    <p class="status" id="status" role="status" aria-live="polite" data-state="pending">Передаём на кухню…</p>
-    <div class="row-btns">
-      <button class="ghost primary" id="retry" hidden>Повторить</button>
-      <button class="ghost" data-go="start">Изменить ответ</button>
+    <div id="rSender">
+      <p class="status" id="status" role="status" aria-live="polite" data-state="pending">Передаём на кухню…</p>
+      <div class="row-btns">
+        <button class="ghost primary" id="retry" hidden>Повторить</button>
+        <button class="ghost" data-go="start">Изменить ответ</button>
+      </div>
     </div>
   </section>
 
@@ -265,15 +261,15 @@
     <p class="eyebrow">Служебный вход</p>
     <h2 class="h sm" tabindex="-1">Настройки кухни</h2>
     <dl class="kv">
-      <div><dt>Ты</dt><dd id="setFrom">—</dd></div>
-      <div><dt>Кухня</dt><dd id="setHost">—</dd></div>
+      <div><dt>Сервер</dt><dd id="setHost">—</dd></div>
+      <div><dt>Канал</dt><dd id="setTopic">—</dd></div>
     </dl>
+    <label class="toggle"><input type="checkbox" id="discreet"> Скрывать детали в уведомлениях</label>
     <div class="row-btns">
       <button class="ghost" id="ping">Проверить связь</button>
-      <button class="ghost" id="changeWho" hidden>Сменить имя</button>
     </div>
     <p class="status" id="pingStatus" role="status" aria-live="polite" hidden></p>
-    <p class="lede" style="font-size:13px">«Проверить связь» отправит тестовый запрос. Если всё настроено, на <b>твой</b> телефон придёт пуш «Связь с кухней есть». Home Assistant отвечает «200 OK» даже на неверный webhook_id, поэтому надёжно проверить можно только пушем.</p>
+    <p class="lede" style="font-size:13px">«Проверить связь» отправит партнёру уведомление «Связь с кухней есть». Если сервер его принял, страница настроена правильно.</p>
     <button class="foot-link danger" id="forget">Забыть настройки на этом телефоне</button>
   </section>
 </main>
@@ -282,8 +278,10 @@
 (function () {
   'use strict';
   var C = window.BISTRO;
-  var STORE_KEY = 'bistro.config.v1';
+  var STORE_KEY = 'bistro.ntfy.v1';
   var ORDER_KEY = 'bistro.orderNo';
+  var REMINDER_KEY = 'bistro.reminderAt';
+  var REMINDER_SEQ = 'bistro-reminder';
 
   // ---------- helpers ----------
   function $(id) { return document.getElementById(id); }
@@ -300,14 +298,10 @@
   function drop(key) { try { localStorage.removeItem(key); } catch (e) {} }
   function randomId() {
     var a = new Uint8Array(8);
-    (window.crypto || window.msCrypto).getRandomValues(a);
-    // префикс-буква: HA не превратит id вроде «1e5…» в число
+    crypto.getRandomValues(a);
     return 'o' + Array.prototype.map.call(a, function (b) { return pad(b.toString(16)); }).join('');
   }
   function clip(s, n) { s = String(s == null ? '' : s).trim(); return s.length > n ? s.slice(0, n) : s; }
-
-  // ---------- конфигурация из фрагмента URL ----------
-  // #ha=<base64(url)>&wh=<webhook_id>&from=<имя>   (или &names=Аня,Макс вместо from)
   function b64decode(s) {
     s = s.replace(/ /g, '+').replace(/-/g, '+').replace(/_/g, '/');
     while (s.length % 4) s += '=';
@@ -315,7 +309,16 @@
     for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new TextDecoder('utf-8').decode(bytes);
   }
-  function normalizeBase(raw) {
+  function b64encode(str) {
+    var bytes = new TextEncoder().encode(str), bin = '';
+    for (var i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  // ---------- конфигурация из фрагмента URL ----------
+  // QR:  #ns=<base64url(адрес ntfy)>&t=<канал>&k=<токен>[&d=1]
+  // Чек: #r=<base64url(JSON чека)> — открывается у партнёра по нажатию на уведомление
+  function normalizeServer(raw) {
     var u = new URL(raw.trim());
     if (u.protocol !== 'https:' && u.protocol !== 'http:') throw new Error('bad protocol');
     // страница на https не может ходить на http (mixed content) — кроме локальной отладки
@@ -326,23 +329,22 @@
     var h = location.hash.replace(/^#/, '');
     if (!h) return null;
     var p = new URLSearchParams(h);
-    if (!p.has('ha') && !p.has('wh')) return null;
+    if (p.has('r')) {
+      try { return { receipt: JSON.parse(b64decode(p.get('r'))) }; }
+      catch (e) { return { error: 'Чек повреждён.' }; }
+    }
+    if (!p.has('ns') && !p.has('t')) return null;
     var res = { error: null, cfg: null };
     try {
-      var ha = normalizeBase(b64decode(p.get('ha') || ''));
-      var wh = (p.get('wh') || '').trim();
-      if (!/^[A-Za-z0-9_\-.~]{8,200}$/.test(wh)) throw new Error('webhook');
-      var names = (p.get('names') || '').split(',').map(function (s) { return clip(s, 40); }).filter(Boolean);
-      var from = clip(p.get('from'), 40);
-      if (names.length && from && names.indexOf(from) < 0) from = '';
-      if (!from && names.length < 2) throw new Error('who');
-      var prev = load(STORE_KEY);
-      // один QR на двоих: не спрашиваем «Кто ты?» повторно, если уже выбрали на этом телефоне
-      if (!from && prev && prev.names && names.indexOf(prev.from) >= 0) from = prev.from;
-      res.cfg = { ha: ha, wh: wh, from: from, names: names };
+      var server = normalizeServer(b64decode(p.get('ns') || ''));
+      var topic = (p.get('t') || '').trim();
+      var token = (p.get('k') || '').trim();
+      if (!/^[-_A-Za-z0-9]{1,64}$/.test(topic)) throw new Error('topic');
+      if (token && !/^[A-Za-z0-9_\-.]{8,200}$/.test(token)) throw new Error('token');
+      res.cfg = { server: server, topic: topic, token: token, discreet: p.get('d') === '1' };
     } catch (e) {
       res.error = e.message === 'http'
-        ? 'Адрес Home Assistant в QR начинается с http://. С GitHub Pages браузер пустит только на https://. Перепечатай QR с https-адресом (Nabu Casa или свой домен с сертификатом).'
+        ? 'Адрес сервера в QR начинается с http://. С GitHub Pages браузер пустит только на https://. Перепечатай QR с https-адресом.'
         : 'QR-код прочитан, но ключ от кухни в нём повреждён. Перепечатай его через tools/make_qr.py.';
     }
     // убираем секреты из адресной строки и истории
@@ -352,13 +354,14 @@
 
   // Страница уже открыта, а QR отсканировали снова → перечитать с новым фрагментом
   window.addEventListener('hashchange', function () {
-    if (/(^#|&)(ha|wh)=/.test(location.hash)) location.reload();
+    if (/(^#|&)(ns|t|r)=/.test(location.hash)) location.reload();
   });
 
   var frag = readFragment();
   if (frag && frag.cfg) save(STORE_KEY, frag.cfg);
   var cfg = load(STORE_KEY);
-  if (cfg && (!cfg.ha || !cfg.wh)) cfg = null;
+  if (cfg && (!cfg.server || !cfg.topic)) cfg = null;
+  var viewOnly = !!(frag && frag.receipt);
 
   // ---------- общие тексты ----------
   var months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
@@ -368,13 +371,13 @@
   $('rName').textContent = C.name;
 
   // ---------- навигация (кнопка «назад» Android тоже работает) ----------
-  var screens = ['setup', 'who', 'start', 'yes', 'maybe', 'no', 'receipt', 'settings'];
+  var screens = ['setup', 'start', 'yes', 'maybe', 'no', 'receipt', 'settings'];
   var current = null;
   function show(name) {
     current = name;
     screens.forEach(function (s) { $('s-' + s).hidden = (s !== name); });
     window.scrollTo(0, 0);
-    var h = $('s-' + name).querySelector('h2:not([hidden])');
+    var h = $('s-' + name).querySelector('h2');
     if (h) h.focus({ preventScroll: true });
   }
   // Старт — корень истории (depth 0), остальные экраны кладутся поверх.
@@ -391,10 +394,10 @@
     if (d > 0) history.go(-d); else go('start', true);
   }
   window.addEventListener('popstate', function (e) {
+    if (viewOnly) return;
     var s = (e.state && e.state.s) || 'start';
     if (!cfg) return show('setup');
-    if (!cfg.from) { renderWho(); return show('who'); }
-    if (s === 'receipt' || s === 'setup' || s === 'who') s = 'start';
+    if (s === 'receipt' || s === 'setup') s = 'start';
     if (s === 'start') resetAll();
     if (s === 'settings') fillSettings();
     show(s);
@@ -488,32 +491,20 @@
   C.no.options.forEach(function (o) { $('noOptions').appendChild(chip(o.emoji + ' ' + o.label, o.id, true)); });
   wireChips($('noOptions'));
 
-  // ---------- «Кто ты?» ----------
-  function renderWho() {
-    var box = $('whoList'); box.textContent = '';
-    (cfg.names || []).forEach(function (n) {
-      var b = el('button', 'answer'); b.type = 'button';
-      var em = el('span', 'em', '👤'); em.setAttribute('aria-hidden', 'true');
-      var t = el('span'); t.appendChild(el('strong', null, n));
-      b.appendChild(em); b.appendChild(t);
-      b.addEventListener('click', function () { cfg.from = n; save(STORE_KEY, cfg); goRoot(); });
-      box.appendChild(b);
-    });
+  // ---------- отправка в ntfy ----------
+  // Публикуем «простым» запросом: POST <сервер>/?auth=… с JSON в теле и без своих заголовков.
+  // Браузеру не нужен CORS-preflight, и не важно, как конкретный браузер относится к
+  // заголовку Authorization. ntfy сам разберёт JSON и ответит с Access-Control-Allow-Origin: *.
+  function authParam() {
+    return cfg.token ? '?auth=' + b64encode('Bearer ' + cfg.token) : '';
   }
-
-  // ---------- отправка в Home Assistant ----------
-  // Webhook в HA зарегистрирован с cors_allowed=True: CORS разрешён для любого Origin,
-  // поэтому обычный fetch с application/json проходит (preflight OPTIONS HA отвечает сам).
-  function webhookUrl() { return cfg.ha + '/api/webhook/' + encodeURIComponent(cfg.wh); }
-
-  function postToHA(payload) {
+  function ntfyFetch(method, path, body) {
     if (navigator.onLine === false) return Promise.reject({ kind: 'offline' });
     var ctrl = new AbortController();
     var timer = setTimeout(function () { ctrl.abort(); }, C.requestTimeoutMs || 12000);
-    return fetch(webhookUrl(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+    return fetch(cfg.server + path + authParam(), {
+      method: method,
+      body: body ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
       cache: 'no-store',
       credentials: 'omit',
@@ -527,22 +518,36 @@
       throw { kind: err && err.name === 'AbortError' ? 'timeout' : 'network' };
     });
   }
+  function publish(msg) {
+    msg.topic = cfg.topic;
+    return ntfyFetch('POST', '/', msg);
+  }
 
   function explain(err) {
     var s = err && err.status;
     switch (err && err.kind) {
       case 'offline': return 'Нет интернета. Проверь сеть и попробуй ещё раз.';
-      case 'timeout': return 'Кухня долго не отвечает. Home Assistant перегружен или недоступен снаружи.';
-      case 'network': return 'Не достучались до Home Assistant: он выключен, нет внешнего доступа или адрес в QR устарел.';
+      case 'timeout': return 'Кухня долго не отвечает. Сервер уведомлений перегружен или недоступен снаружи.';
+      case 'network': return 'Не достучались до сервера уведомлений: он выключен, нет внешнего доступа или адрес в QR устарел.';
     }
-    if (s === 405) return 'Вебхук не принимает POST (405). В автоматизации нужен allowed_methods: [POST].';
-    if (s === 404) return 'По этому адресу нет Home Assistant (404). Проверь адрес и перепечатай QR.';
-    if (s === 401 || s === 403) return 'Доступ запрещён (' + s + '). Похоже на прокси или блокировку по IP.';
-    if (s >= 500) return 'Сервер ответил ошибкой ' + s + '. Home Assistant или reverse proxy перед ним сейчас не в порядке.';
+    if (s === 401 || s === 403) return 'Ключ из QR не подходит (' + s + '): токен удалён или ему нельзя писать в этот канал. Перепечатай QR.';
+    if (s === 404) return 'По этому адресу нет сервера уведомлений (404). Проверь адрес и перепечатай QR.';
+    if (s === 413) return 'Сообщение слишком длинное. Сократи своё условие.';
+    if (s === 429) return 'Сервер просит подождать (429): слишком много сообщений подряд.';
+    if (s >= 500) return 'Сервер ответил ошибкой ' + s + '. Сервер уведомлений или прокси перед ним сейчас не в порядке.';
     return 'Неожиданный ответ сервера' + (s ? ' (' + s + ')' : '') + '.';
   }
 
-  var pending = null;   // { payload } последнего заказа — для «Повторить»
+  // Время напоминания: завтра в reminderTime; после полуночи «завтра» — это уже сегодня вечером
+  function reminderDate() {
+    var parts = String(C.reminderTime || '21:00').split(':');
+    var d = new Date();
+    if (d.getHours() >= 5) d.setDate(d.getDate() + 1);
+    d.setHours(+parts[0] || 21, +parts[1] || 0, 0, 0);
+    return d;
+  }
+
+  var pending = null;   // { stamp, jobs: [{run, done, optional}] } — для «Повторить»
   var sending = false;
 
   function setStatus(state, text) {
@@ -553,16 +558,28 @@
     $('retry').disabled = false;
   }
 
+  function runJobs() {
+    var next = pending.jobs.filter(function (j) { return !j.done; })[0];
+    if (!next) return Promise.resolve();
+    return next.run().then(function () { next.done = true; }, function (err) {
+      if (next.optional) { next.done = true; return; }
+      throw err;
+    }).then(runJobs);
+  }
+
   function sendOrder() {
     if (sending || !pending) return;
     sending = true;
     setStatus('pending', 'Передаём на кухню…');
     $('rStamp').textContent = pending.stamp;
-    postToHA(pending.payload).then(function () {
-      setStatus('ok', 'Ответ ушёл партнёру');
+    runJobs().then(function () {
+      if (pending.reminderAt) save(REMINDER_KEY, pending.reminderAt);
+      if (pending.cancelReminder) drop(REMINDER_KEY);
+      setStatus('ok', pending.okText);
     }, function (err) {
-      $('rStamp').textContent = 'Не отправлено';
-      setStatus('error', explain(err));
+      var first = pending.jobs[0].done;
+      $('rStamp').textContent = first ? pending.stamp : 'Не отправлено';
+      setStatus('error', (first ? 'Ответ ушёл, а напоминание не поставилось. ' : '') + explain(err));
     }).then(function () { sending = false; });
   }
   $('retry').addEventListener('click', function () { $('retry').disabled = true; sendOrder(); });
@@ -573,26 +590,61 @@
     return n;
   }
 
-  function rows(list) {
+  function renderReceipt(r) {
+    $('rEyebrow').textContent = r.e;
+    $('rMeta').textContent = 'Заказ № ' + r.n + ' · ' + r.t;
     var box = $('rRows'); box.textContent = '';
-    list.forEach(function (r) {
-      var row = el('div', 'r-row');
-      row.appendChild(el('span', 'k', r[0])); row.appendChild(el('span', 'd')); row.appendChild(el('span', 'v', r[1]));
-      box.appendChild(row);
+    (r.rows || []).forEach(function (row) {
+      var line = el('div', 'r-row');
+      line.appendChild(el('span', 'k', row[0])); line.appendChild(el('span', 'd')); line.appendChild(el('span', 'v', row[1]));
+      box.appendChild(line);
     });
+    $('rTotalK').textContent = r.tk;
+    $('rTotalV').textContent = r.tv;
+    $('rFoot').textContent = r.f;
+    $('rStamp').textContent = r.s;
   }
 
-  function placeOrder(answer, details, r) {
+  // answer: yes|maybe|no; n — тексты уведомления; r — чек
+  function placeOrder(answer, n, r, postpone) {
     var ts = new Date();
-    $('rEyebrow').textContent = r.eyebrow;
-    $('rMeta').textContent = 'Заказ № ' + String(nextOrderNo() % 10000).padStart(4, '0') + ' · ' + hhmm(ts);
-    rows(r.rows);
-    $('rTotalK').textContent = r.totalK;
-    $('rTotalV').textContent = r.totalV;
-    $('rFoot').textContent = r.foot;
+    r.n = String(nextOrderNo() % 10000).padStart(4, '0');
+    r.t = hhmm(ts);
+    renderReceipt(r);
+    var N = C.notify;
+    var receiptUrl = location.origin + location.pathname + '#r=' + b64encode(JSON.stringify(r));
+    var discreet = !!cfg.discreet;
+    var main = {
+      title: discreet ? N.discreetTitle : n.title,
+      message: discreet ? N.discreetMessage : n.message,
+      priority: answer === 'yes' ? 4 : 3,
+      click: receiptUrl,
+      actions: [{ action: 'view', label: N.openReceipt, url: receiptUrl, clear: true }],
+      sequence_id: randomId()   // «Повторить» заменит уведомление, а не продублирует
+    };
+    var jobs = [{ run: function () { return publish(main); } }];
+    var reminderAt = null, cancelReminder = false;
+    if (postpone) {
+      var at = reminderDate();
+      reminderAt = at.getTime();
+      jobs.push({ run: function () {
+        return publish({
+          title: discreet ? N.discreetTitle : N.reminder[0],
+          message: discreet ? N.discreetReminder : N.reminder[1],
+          priority: 4,
+          click: receiptUrl,
+          delay: String(Math.floor(reminderAt / 1000)),
+          sequence_id: REMINDER_SEQ   // новый перенос заменяет старое напоминание
+        });
+      } });
+    } else if ((load(REMINDER_KEY) || 0) > Date.now()) {
+      // любой другой ответ отменяет запланированное напоминание
+      cancelReminder = true;
+      jobs.push({ optional: true, run: function () { return ntfyFetch('DELETE', '/' + cfg.topic + '/' + REMINDER_SEQ); } });
+    }
     pending = {
-      stamp: r.stamp,
-      payload: { v: 1, id: randomId(), from: cfg.from, answer: answer, details: details, ts: ts.toISOString() }
+      stamp: r.s, jobs: jobs, reminderAt: reminderAt, cancelReminder: cancelReminder,
+      okText: postpone ? 'Ответ ушёл партнёру. Напоминание придёт завтра в ' + C.reminderTime + '.' : 'Ответ ушёл партнёру'
     };
     go('receipt', true);   // «назад» из чека ведёт в меню, а не в форму
     sendOrder();
@@ -601,7 +653,7 @@
   document.querySelectorAll('[data-send]').forEach(function (b) {
     b.addEventListener('click', function () {
       if (sending) return;
-      var kind = b.dataset.send;
+      var kind = b.dataset.send, N = C.notify;
       if (kind === 'yes') {
         var d = {}, rr = [['Десерт', 'да']];
         C.yes.groups.forEach(function (g) {
@@ -614,56 +666,60 @@
             rr.push([g.title, d[g.key]]);
           }
         });
-        if (yesGroups.spice) d.spice_level = yesGroups.spice.cfg.options.indexOf(d.spice) + 1 || 2;
-        placeOrder('yes', d, {
-          eyebrow: 'Заказ принят', stamp: 'Принято', rows: rr,
-          totalK: 'Итого', totalV: 'бесценно', foot: 'Шеф уже улыбается'
+        var msg = [d.time, d.dish, d.spice].filter(Boolean).join(' · ');
+        if (d.setting && d.setting.length) msg += '\nСервировка: ' + d.setting.join(', ');
+        placeOrder('yes', { title: N.yes, message: msg }, {
+          e: 'Заказ принят', s: 'Принято', rows: rr,
+          tk: 'Итого', tv: 'бесценно', f: 'Шеф уже улыбается'
         });
       } else if (kind === 'maybe') {
         var helps = picked($('maybeOptions'));
         var custom = clip($('custom').value, C.maybe.customMaxLength || 200);
         var list = helps.concat(custom ? [custom] : []);
         if (!list.length) list = [C.maybe.fallback];
-        placeOrder('maybe', { helps: helps, custom: custom }, {
-          eyebrow: 'Условия переданы', stamp: 'На рассмотрении',
+        placeOrder('maybe', { title: N.maybe, message: list.join(' · ') }, {
+          e: 'Условия переданы', s: 'На рассмотрении',
           rows: list.map(function (h, i) { return ['Условие ' + (i + 1), h]; }),
-          totalK: 'Шансы', totalV: 'растут', foot: 'Выполни условия, и шеф пересмотрит меню'
+          tk: 'Шансы', tv: 'растут', f: 'Выполни условия, и шеф пересмотрит меню'
         });
       } else {
         var id = picked($('noOptions'))[0] || C.no.defaultId;
         var opt = C.no.options.filter(function (o) { return o.id === id; })[0] || C.no.options[0];
         var later = opt.id === 'tomorrow';
-        placeOrder('no', { option: opt.id, label: opt.label }, {
-          eyebrow: C.no.eyebrow, stamp: later ? 'Завтра' : 'Уют',
+        placeOrder('no', {
+          title: later ? N.tomorrow : N.no,
+          message: opt.label + (later ? '. Напомню завтра в ' + C.reminderTime : '')
+        }, {
+          e: C.no.eyebrow, s: later ? 'Завтра' : 'Уют',
           rows: [['Десерт', later ? 'перенесён' : 'не сегодня'], ['Вместо него', opt.label]]
             .concat(later ? [['Напоминание', 'завтра, ' + C.reminderTime]] : []),
-          totalK: 'Итого', totalV: 'обнимашки', foot: 'Спасибо за честный ответ'
-        });
+          tk: 'Итого', tv: 'обнимашки', f: 'Спасибо за честный ответ'
+        }, later);
       }
     });
   });
 
   // ---------- служебный вход ----------
   function fillSettings() {
-    $('setFrom').textContent = cfg.from || '—';
-    var host = cfg.ha; try { host = new URL(cfg.ha).host; } catch (e) {}
+    var host = cfg.server; try { host = new URL(cfg.server).host; } catch (e) {}
     $('setHost').textContent = host;
-    $('changeWho').hidden = !(cfg.names && cfg.names.length > 1);
+    $('setTopic').textContent = cfg.topic;
+    $('discreet').checked = !!cfg.discreet;
     $('pingStatus').hidden = true;
   }
+  $('discreet').addEventListener('change', function (e) { cfg.discreet = e.target.checked; save(STORE_KEY, cfg); });
   $('ping').addEventListener('click', function () {
     var st = $('pingStatus'), btn = $('ping');
     btn.disabled = true;
     st.hidden = false; st.dataset.state = 'pending'; st.textContent = 'Стучимся на кухню…';
-    postToHA({ v: 1, id: randomId(), from: cfg.from, answer: 'ping', details: {}, ts: new Date().toISOString() })
+    publish({ title: C.notify.ping[0], message: C.notify.ping[1], priority: 3 })
       .then(function () {
         st.dataset.state = 'ok';
-        st.textContent = 'Home Assistant ответил. Жди пуш «Связь с кухней есть» на свой телефон. Не пришёл за минуту? Значит, неверный webhook_id, имя «' + cfg.from + '» не указано в пакете или автоматизация выключена.';
+        st.textContent = 'Сервер принял сообщение: адрес и ключ верные. Уведомление уже летит партнёру.';
       }, function (err) {
         st.dataset.state = 'error'; st.textContent = explain(err);
       }).then(function () { btn.disabled = false; });
   });
-  $('changeWho').addEventListener('click', function () { renderWho(); go('who'); });
   $('forget').addEventListener('click', function () {
     if (!confirm('Забыть адрес кухни на этом телефоне? Потом придётся снова сканировать QR.')) return;
     drop(STORE_KEY); cfg = null;
@@ -671,11 +727,15 @@
   });
 
   // ---------- первый экран ----------
-  if (!cfg) {
+  if (viewOnly) {
+    // партнёр открыл чек из уведомления: только показать
+    renderReceipt(frag.receipt);
+    $('receipt').dataset.state = 'ok';
+    $('rSender').hidden = true;
+    show('receipt');
+  } else if (!cfg) {
     if (frag && frag.error) { $('setupError').textContent = frag.error; $('setupError').hidden = false; }
     go('setup', true);
-  } else if (!cfg.from) {
-    renderWho(); go('who', true);
   } else {
     go('start', true);
   }

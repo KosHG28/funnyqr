@@ -1,20 +1,16 @@
 #!/usr/bin/env python3
-"""Генератор QR-наклеек «Что на ужин?» для холодильника.
+"""Генератор QR-наклейки «Что на ужин?» для холодильника.
 
-Для каждого партнёра делает PNG и PDF формата A6 (105×148 мм, 300 dpi).
-Адрес HA и webhook_id зашиваются во фрагмент ссылки (#…), который
-браузер не отправляет на сервер GitHub.
+Делает PNG и PDF формата A6 (105×148 мм, 300 dpi). Адрес сервера ntfy,
+канал и токен зашиваются во фрагмент ссылки (#…), который браузер не
+отправляет на сервер GitHub.
 
-ВНИМАНИЕ: готовые QR содержат секреты. Не коммитьте папку qr/ (она в .gitignore).
+ВНИМАНИЕ: готовый QR содержит токен. Не коммитьте папку qr/ (она в .gitignore).
 
-Примеры:
-  # два QR — у каждого свой (рекомендуется)
-  python3 tools/make_qr.py --ha https://ha.example.ru --webhook "$WEBHOOK_ID" --names Аня Макс
+Пример:
+  python3 tools/make_qr.py --server https://ntfy.example.ru --topic bistro --token tk_xxxxxxxx
 
-  # один QR на двоих — при первом открытии страница спросит «Кто ты?»
-  python3 tools/make_qr.py --ha https://ha.example.ru --webhook "$WEBHOOK_ID" --names Аня Макс --one
-
-Зависимости: pip install "qrcode[pil]"
+Зависимости: pip install -r tools/requirements.txt
 """
 import argparse
 import base64
@@ -52,12 +48,12 @@ def b64url(s):
     return base64.urlsafe_b64encode(s.encode("utf-8")).decode("ascii").rstrip("=")
 
 
-def build_url(page, ha, webhook, who=None, names=None):
-    frag = f"ha={b64url(ha)}&wh={quote(webhook, safe='')}"
-    if who:
-        frag += f"&from={quote(who, safe='')}"
-    if names:
-        frag += f"&names={quote(','.join(names), safe=',')}"
+def build_url(page, server, topic, token=None, discreet=False):
+    frag = f"ns={b64url(server)}&t={quote(topic, safe='')}"
+    if token:
+        frag += f"&k={quote(token, safe='')}"
+    if discreet:
+        frag += "&d=1"
     return f"{page}#{frag}"
 
 
@@ -121,44 +117,38 @@ def slug(s):
 
 
 def main():
-    ap = argparse.ArgumentParser(description="QR-наклейки «Что на ужин?» (PNG + A6 PDF)")
-    ap.add_argument("--ha", required=True, help="внешний адрес Home Assistant, https://…")
-    ap.add_argument("--webhook", required=True, help="webhook_id (как в secrets.yaml)")
-    ap.add_argument("--names", nargs="+", required=True, help="имена партнёров, ровно как в пакете HA")
-    ap.add_argument("--one", action="store_true", help="один общий QR с выбором «Кто ты?»")
+    ap = argparse.ArgumentParser(description="QR-наклейка «Что на ужин?» (PNG + A6 PDF)")
+    ap.add_argument("--server", required=True, help="внешний адрес ntfy, https://…")
+    ap.add_argument("--topic", required=True, help="канал ntfy, на который подписан телефон партнёра")
+    ap.add_argument("--token", default="", help="токен с правом записи в канал (tk_…)")
+    ap.add_argument("--discreet", action="store_true", help="дискретный режим: в уведомлении только «Ваш заказ принят»")
     ap.add_argument("--page", default=DEFAULT_PAGE, help=f"адрес страницы (по умолчанию {DEFAULT_PAGE})")
     ap.add_argument("--out", default=str(ROOT / "qr"), help="куда сохранить (по умолчанию qr/)")
-    ap.add_argument("--no-label", action="store_true", help="не печатать имя внизу наклейки")
+    ap.add_argument("--label", default="", help="подпись мелким шрифтом внизу наклейки")
     a = ap.parse_args()
 
-    ha = a.ha.strip().rstrip("/")
-    parts = urlsplit(ha)
+    server = a.server.strip().rstrip("/")
+    parts = urlsplit(server)
     if parts.scheme not in ("https", "http") or not parts.netloc:
-        sys.exit("--ha должен быть полным адресом, например https://ha.example.ru")
+        sys.exit("--server должен быть полным адресом, например https://ntfy.example.ru")
     if parts.scheme == "http":
-        print("⚠  Адрес HA на http:// — со страницы на GitHub Pages (https) браузер его заблокирует.", file=sys.stderr)
-    if not re.fullmatch(r"[A-Za-z0-9_\-.~]{8,200}", a.webhook):
-        sys.exit("--webhook: 8–200 символов из A–Z a–z 0–9 _ - . ~")
-    if a.one and len(a.names) < 2:
-        sys.exit("--one имеет смысл минимум для двух имён")
-    for n in a.names:
-        if "," in n:
-            sys.exit(f"Имя «{n}» не должно содержать запятую")
+        print("⚠  Адрес на http:// — со страницы на GitHub Pages (https) браузер его заблокирует.", file=sys.stderr)
+    if not re.fullmatch(r"[-_A-Za-z0-9]{1,64}", a.topic):
+        sys.exit("--topic: 1–64 символа из A–Z a–z 0–9 _ -")
+    if a.token and not re.fullmatch(r"[A-Za-z0-9_\-.]{8,200}", a.token):
+        sys.exit("--token выглядит неправильно (ожидается tk_…)")
     page = a.page if a.page.endswith("/") or a.page.endswith(".html") else a.page + "/"
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    jobs = ([("вместе", build_url(page, ha, a.webhook, names=a.names), None)] if a.one
-            else [(n, build_url(page, ha, a.webhook, who=n), n) for n in a.names])
-
-    for name, url, label in jobs:
-        img, version = make_card(url, None if a.no_label else label)
-        base = out / f"bistro-{slug(name)}"
-        img.save(base.with_suffix(".png"), dpi=(DPI, DPI))
-        img.save(f"{base}-A6.pdf", "PDF", resolution=DPI)
-        print(f"✓ {name}: {base}.png, {base}-A6.pdf  (QR версии {version}, {len(url)} символов)")
-        print(f"  ссылка: {url}")
-    print("\nЭти файлы содержат адрес HA и webhook_id — не публикуйте их и не коммитьте.")
+    url = build_url(page, server, a.topic, a.token, a.discreet)
+    img, version = make_card(url, a.label or None)
+    base = out / "bistro"
+    img.save(base.with_suffix(".png"), dpi=(DPI, DPI))
+    img.save(f"{base}-A6.pdf", "PDF", resolution=DPI)
+    print(f"✓ {base}.png, {base}-A6.pdf  (QR версии {version}, {len(url)} символов)")
+    print(f"  ссылка: {url}")
+    print("\nВ этих файлах адрес сервера и токен — не публикуйте их и не коммитьте.")
 
 
 if __name__ == "__main__":

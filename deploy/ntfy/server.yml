@@ -1,0 +1,21 @@
+# Настройки ntfy. Замените base-url на свой внешний адрес.
+base-url: "https://ntfy.example.ru"
+listen-http: ":80"
+
+# Сервер стоит за reverse proxy (Nginx Proxy Manager, Caddy, Traefik, Cloudflare Tunnel)
+behind-proxy: true
+
+# Хранилище сообщений: нужно для отложенного напоминания «завтра в 21:00»
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "72h"
+
+# Закрываем сервер от посторонних: читать и писать можно только с логином или токеном
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"
+
+# Мгновенная доставка на Android без лишнего расхода батареи:
+# через ntfy.sh уходит только сигнал «проверь сервер», сами тексты остаются у вас
+upstream-base-url: "https://ntfy.sh"
+
+# Веб-интерфейс не нужен
+web-root: "disable"
